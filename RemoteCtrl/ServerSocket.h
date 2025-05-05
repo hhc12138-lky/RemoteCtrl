@@ -32,7 +32,7 @@ public:
 		strData = pack.strData;
 		sSum = pack.sSum;
 	}
-	CPacket(const BYTE* pData, size_t& nSize) {
+	CPacket(const BYTE* pData, size_t& nSize) :sHead(0), nLength(0), sCmd(0), sSum(0) {
 		size_t i = 0;
 		for (; i < nSize; i++) {
 			if (*(WORD*)(pData + i) == 0xFEFF) {

@@ -422,7 +422,7 @@ int ExcuteCommand(int nCmd)
 int main()
 {
 	int nRetCode = 0;
-
+	 
 	HMODULE hModule = ::GetModuleHandle(nullptr);
 
 	if (hModule != nullptr)
