@@ -21,6 +21,7 @@
 CWinApp theApp;
 using namespace std;
 
+// 使用回调函数 将函数作为参数传递 实现解耦合
 int main()
 {
 	int nRetCode = 0;
@@ -38,36 +39,19 @@ int main()
 		}
 		else
 		{
-			//1 进度的可控性 2 对接的方便性 3 可行性评估，提早暴露风险
-			// TODO: socket、bind、listen、accept、read、write、close
-			//套接字初始化
 			CCommand cmd;
 			CServerSocket* pserver = CServerSocket::getInstance();
-			int count = 0;
-			if (pserver->InitSocket() == false) {
+			int ret = pserver->Run(&CCommand::RunCommand, &cmd);
+			switch (ret) {
+			case -1:
 				MessageBox(NULL, _T("网络初始化异常，未能成功初始hi，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
 				exit(0);
-			}
-			while (CServerSocket::getInstance() != NULL) {
-				if (pserver->AcceptClient() == false) {
-					if (count >= 3) {
-						MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-						exit(0);
-					}
-					MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-					count++;
-				}
-				TRACE("AcceptClient return true\r\n");
-				int ret = pserver->DealCommand();
-				TRACE("DealCommand ret %d\r\n", ret);
-				if (ret > 0) {
-					ret = cmd.ExcuteCommand(ret);
-					if (ret != 0) {
-						TRACE("执行命令失败：%d ret=%d\r\n", pserver->GetPacket().sCmd, ret);
-					}
-					pserver->CloseClient();
-					TRACE("Command has done!\r\n");
-				}
+				break;
+			case -2:
+				MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
+				exit(0);
+				break;
+
 			}
 		}
 	}

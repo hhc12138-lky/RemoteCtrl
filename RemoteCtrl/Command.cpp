@@ -28,7 +28,7 @@ CCommand::~CCommand() {
 	// 清理资源（如有）
 }
 
-int CCommand::ExcuteCommand(int nCmd)
+int CCommand::ExcuteCommand(int nCmd, std::list<CPacket>& listPackets, CPacket& inPacket)
 {
 	//根据指令号从映射表中寻找成员函数指针，再根据该指针调用成员函数
 	std::map<int, CMDFUNC>::iterator it = m_mapFunction.find(nCmd);
@@ -36,6 +36,6 @@ int CCommand::ExcuteCommand(int nCmd)
 		return -1;
 	}
 	
-	return(this->*it->second)();
+	return(this->*it->second)(listPackets, inPacket);
 
 }
