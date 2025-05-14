@@ -179,9 +179,9 @@ protected:
 			} while (rlen >= 1024);
 			fclose(pFile);
 		}
-		listPackets.push_back(CPacket(4, NULL, 0));
-		//CPacket pack(4, NULL, 0);
-		//CServerSocket::getInstance()->Send(pack);
+		else {
+			listPackets.push_back(CPacket(4, NULL, 0));
+		}
 		return 0;
 	}
 
