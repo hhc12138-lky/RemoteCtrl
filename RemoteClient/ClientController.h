@@ -4,6 +4,7 @@
 #include "RemoteClientDlg.h"
 #include "StatusDlg.h"
 #include "Resource.h"
+#include "EdoyunTool.h"
 
 #include<map>
 
@@ -26,8 +27,82 @@ public:
 	//发送消息
 	LRESULT SendMessage(MSG msg);
 
+	void UpdataAddress(int nIP, int nPort) {
+		CClientSocket::getInstance()->UpdataAddress(nIP, nPort);
+	}
+	int DealCommand() {
+		return CClientSocket::getInstance()->DealCommand();
+	}
+	void CloseSocket() {
+		CClientSocket::getInstance()->CloseSocket();
+	}
+	bool SendPacket(const CPacket& pack) {
+		CClientSocket* pClient = CClientSocket::getInstance();
+		if (pClient->InitSocket() == false) return false;
+		pClient->Send(pack);
+	}
+	//1 查看磁盘分区
+	//2 查看指定目录下的文件
+	//3 打开文件
+	//4 下载文件
+	//9 删除文件
+	//5 鼠标操作
+	//6 发送屏幕内容
+	//7 锁机
+	//8 解锁
+	//1981 测试连接
+	//返回值：是命令号，如果小于0则是错误
+	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0) {
+		CClientSocket* pClient = CClientSocket::getInstance();
+		if (pClient->InitSocket() == false) return false;
+		pClient->Send(CPacket(nCmd, pData, nLength));
+		int cmd = DealCommand();
+		TRACE("ack:%d\r\n", cmd);
+		if (bAutoClose)
+			pClient->CloseSocket();
+		return cmd;
+	}
+
+	int GetImage(CImage& image) {
+		CClientSocket* pClient = CClientSocket::getInstance();
+		return CEdoyunTool::Bytes2Image(image, pClient->GetPacket().strData);
+	}
+
+	int DownFile(CString strPath) {
+		CFileDialog dlg(FALSE, NULL,
+			strPath, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
+			NULL, &m_remoteDlg);
+		if (dlg.DoModal() == IDOK) {
+			m_strRemote = strPath;
+			m_strLocal = dlg.GetPathName();
+
+			CString strLocal = dlg.GetPathName();
+			m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+
+			if (WaitForSingleObject(m_hThreadDownload,0)!=WAIT_TIMEOUT){
+				return -1;
+			}
+			m_remoteDlg.BeginWaitCursor();
+			m_statusDlg.m_info.SetWindowText(_T("命令正在执行中！"));
+			m_statusDlg.ShowWindow(SW_SHOW);
+			m_statusDlg.CenterWindow(&m_remoteDlg);
+			m_statusDlg.SetActiveWindow();
+		}
+
+		return 0;
+	}
+
+	void StartWatchScreen();
 protected:
+	void threadWatchScreen();
+	static void threadWatchScreen(void* arg);
+	void threadDownloadFile();
+	static void threadDownloadEntry(void* arg);
+
 	CClientController():m_statusDlg(&m_remoteDlg),m_watchDlg(&m_remoteDlg) {
+		m_isClosed = true;
+		m_hThreadWatch = INVALID_HANDLE_VALUE;
+		m_hThreadDownload = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE;
 		m_hThreadID = -1;
 	}
@@ -86,6 +161,11 @@ private:
 	CStatusDlg m_statusDlg;
 
 	HANDLE m_hThread;
+	HANDLE m_hThreadDownload;
+	HANDLE m_hThreadWatch;
+	CString m_strRemote;//下载文件的远程路径
+	CString m_strLocal;//下载文件的本地路径
+	bool m_isClosed;//监视是否关闭
 	unsigned m_hThreadID;
 
 	static CClientController* m_pInstance; //单例对象
