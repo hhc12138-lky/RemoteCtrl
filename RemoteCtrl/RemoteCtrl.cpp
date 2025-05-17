@@ -24,7 +24,7 @@ using namespace std;
 // 使用回调函数 将函数作为参数传递 实现解耦合
 int main()
 {
-	int nRetCode = 0;
+	int nRetCode = 0;  
 	 
 	HMODULE hModule = ::GetModuleHandle(nullptr);
 

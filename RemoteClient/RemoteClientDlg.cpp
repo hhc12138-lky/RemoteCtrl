@@ -85,7 +85,6 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_COMMAND(ID_DOWNLOAD_FILE, &CRemoteClientDlg::OnDownloadFile)
 	ON_COMMAND(ID_DELETE_FILE, &CRemoteClientDlg::OnDeleteFile)
 	ON_COMMAND(ID_RUN_FILE, &CRemoteClientDlg::OnRunFile)
-	ON_MESSAGE(WM_SEND_PACKET, &CRemoteClientDlg::OnSendPacket) //注册消息③
 	ON_BN_CLICKED(IDC_BTN_START_WATCH, &CRemoteClientDlg::OnBnClickedBtnStartWatch)
 	ON_WM_TIMER()
 	ON_NOTIFY(IPN_FIELDCHANGED, IDC_IPADDRESS_SERV, &CRemoteClientDlg::OnIpnFieldchangedIpaddressServ)
@@ -127,14 +126,13 @@ BOOL CRemoteClientDlg::OnInitDialog()
 
 	// TODO: 在此添加额外的初始化代码
 	UpdateData();
-	m_server_address = 0xC0A80164;//192.168.1.100 ！！注意这里根据实际情况修改：需要查看虚拟机中的服务端所在的私网地址具体是什么！！
+	m_server_address = 0x0A00020F;//10.0.2.15 ！！注意这里根据实际情况修改：需要查看虚拟机中的服务端所在的私网地址具体是什么！！
 	m_nPort = _T("9527");
 	CClientController* pController = CClientController::getInstance();
 	pController->UpdataAddress(m_server_address, atoi((LPCTSTR)m_nPort));
 	UpdateData(FALSE);
 	m_dlgStatus.Create(IDD_DLG_STATUS, this);
 	m_dlgStatus.ShowWindow(SW_HIDE);
-	m_isFull = false;
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -387,33 +385,6 @@ void CRemoteClientDlg::OnRunFile()
 	if (ret < 0) {
 		AfxMessageBox("打开文件命令执行失败！！！");
 	}
-}
-
-LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
-{//实现消息响应函数④
-	int ret = 0;
-	int cmd = wParam >> 1;
-	switch (cmd) {
-	case 4: {
-		CString strFile = (LPCSTR)lParam;
-		ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
-	}
-		  break;
-	case 5: {//鼠标操作
-		ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1, (BYTE*)lParam, sizeof(MOUSEEV));
-	}
-		  break;
-	case 6:
-	case 7:
-	case 8: {
-		ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1);
-	}
-		  break;
-	default:
-		ret = -1;
-	}
-
-	return ret;
 }
 
 
