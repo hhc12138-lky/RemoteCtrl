@@ -8,8 +8,8 @@
 
 #include<map>
 
-#define WM_SEND_PACK (WM_USER+1) // 发送包
-#define WM_SEND_DATA (WM_USER+2) // 发送数据
+//#define WM_SEND_PACK (WM_USER+1) // 发送包
+//#define WM_SEND_DATA (WM_USER+2) // 发送数据
 #define WM_SHOW_STATUS (WM_USER+3) // 显示状态
 #define WM_SHOW_WATCH (WM_USER+4) // 远程监控
 #define WM_SEND_MESSAGE (WM_USER+0x1000)// 自定义消息处理
@@ -36,11 +36,7 @@ public:
 	void CloseSocket() {
 		CClientSocket::getInstance()->CloseSocket();
 	}
-	bool SendPacket(const CPacket& pack) {
-		CClientSocket* pClient = CClientSocket::getInstance();
-		if (pClient->InitSocket() == false) return false;
-		pClient->Send(pack);
-	}
+
 	//1 查看磁盘分区
 	//2 查看指定目录下的文件
 	//3 打开文件
@@ -52,7 +48,7 @@ public:
 	//8 解锁
 	//1981 测试连接
 	//返回值：是命令号，如果小于0则是错误
-	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
+	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0, std::list<CPacket>* plstPacks=NULL);
 
 	int GetImage(CImage& image) {
 		CClientSocket* pClient = CClientSocket::getInstance();
@@ -92,8 +88,6 @@ protected:
 	//WPARAM 是一个无符号整数指针类型（UINT_PTR），通常用于传递消息或函数调用的第一个附加参数。
 	//LPARAM 是一个长指针类型（LONG_PTR），通常用于传递消息或函数调用的附加参数（第二个）。
 	//如果需要传递更复杂的数据，可以将数据封装到一个结构体中，并通过 LPARAM 传递该结构体的指针。
-	LRESULT OnSendPacket(UINT nMsg, WPARAM wParam, LPARAM lParam);
-	LRESULT OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	LRESULT OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	LRESULT OnShowWatcher(UINT nMsg, WPARAM wParam, LPARAM lParam);
 
