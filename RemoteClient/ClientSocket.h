@@ -229,7 +229,7 @@ public:
 private:
 	bool m_bAutoClose;
 	std::list<CPacket> m_lstSend;
-	std::map<HANDLE, std::list<CPacket>> m_mapAck; //用于存储不同指令应带回来的不连续的包；对随机取值无要求，因此使用双向列表
+	std::map<HANDLE, std::list<CPacket>&> m_mapAck; //用于存储不同指令应带回来的不连续的包；对随机取值无要求，因此使用双向列表
 	std::map<HANDLE, bool> m_mapAutoClosed;
 	int m_nIP;//地址
 	int m_nPort;//端口

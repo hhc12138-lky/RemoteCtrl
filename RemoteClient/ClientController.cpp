@@ -66,7 +66,7 @@ int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
 		plstPacks = &lstPacks;
 	}
 	CloseHandle(hEvent);//回收实践句柄，防止资源耗尽
-	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent),lstPacks);
+	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent),lstPacks, bAutoClose);
 	if (lstPacks.size() > 0) {
 		return plstPacks->front().sCmd;
 	}
