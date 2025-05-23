@@ -11,6 +11,7 @@
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
+//​​Visual C++ 特有的链接器指令​​，用于控制程序的 ​​入口点（Entry Point）​​ 和 ​​子系统（Subsystem）
 //#pragma comment( linker, "/subsystem:windows /entry:WinMainCRTStartup" )
 //#pragma comment( linker, "/subsystem:windows /entry:mainCRTStartup" )
 //#pragma comment( linker, "/subsystem:console /entry:mainCRTStartup" )

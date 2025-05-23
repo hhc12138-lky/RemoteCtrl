@@ -7,23 +7,22 @@
 #include "RemoteClient.h"
 #include "ClientController.h"
 
+//在调试模式下重定义 new 操作符为 DEBUG_NEW，用于内存泄漏检测
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
 
-// CRemoteClientApp
-
+//定义消息映射：将 ID_HELP 命令映射到 CWinApp::OnHelp 处理函数
 BEGIN_MESSAGE_MAP(CRemoteClientApp, CWinApp)
 	ON_COMMAND(ID_HELP, &CWinApp::OnHelp)
 END_MESSAGE_MAP()
 
 
-// CRemoteClientApp 构造
-
+// CRemoteClientApp 构造函数
 CRemoteClientApp::CRemoteClientApp()
 {
-	// 支持重新启动管理器
+	// 设置重启管理器支持标志，允许应用程序在意外关闭后恢复
 	m_dwRestartManagerSupportFlags = AFX_RESTART_MANAGER_SUPPORT_RESTART;
 
 	// TODO: 在此处添加构造代码，
@@ -36,39 +35,28 @@ CRemoteClientApp::CRemoteClientApp()
 CRemoteClientApp theApp;
 
 
-// CRemoteClientApp 初始化
-
+// 应用程序初始化入口点
 BOOL CRemoteClientApp::InitInstance()
 {
-	// 如果一个运行在 Windows XP 上的应用程序清单指定要
-	// 使用 ComCtl32.dll 版本 6 或更高版本来启用可视化方式，
-	//则需要 InitCommonControlsEx()。  否则，将无法创建窗口。
+	// 初始化Windows公共控件（如按钮、列表框等）
 	INITCOMMONCONTROLSEX InitCtrls;
 	InitCtrls.dwSize = sizeof(InitCtrls);
-	// 将它设置为包括所有要在应用程序中使用的
-	// 公共控件类。
 	InitCtrls.dwICC = ICC_WIN95_CLASSES;
 	InitCommonControlsEx(&InitCtrls);
 
+	// 调用基类的初始化函数
 	CWinApp::InitInstance();
 
-
+	// 启用对包含ActiveX控件的支持
 	AfxEnableControlContainer();
 
-	// 创建 shell 管理器，以防对话框包含
-	// 任何 shell 树视图控件或 shell 列表视图控件。
+	// 创建shell管理器，用于处理shell相关的控件（如文件浏览器）
 	CShellManager *pShellManager = new CShellManager;
 
-	// 激活“Windows Native”视觉管理器，以便在 MFC 控件中启用主题
+	// 设置默认的视觉管理器，启用Windows原生主题
 	CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerWindows));
 
-	// 标准初始化
-	// 如果未使用这些功能并希望减小
-	// 最终可执行文件的大小，则应移除下列
-	// 不需要的特定初始化例程
-	// 更改用于存储设置的注册表项
-	// TODO: 应适当修改该字符串，
-	// 例如修改为公司或组织名
+	//设置注册表键路径，用于存储应用程序配置（如窗口位置、用户设置等）。默认是示例文本，实际应改为公司/应用名。
 	SetRegistryKey(_T("应用程序向导生成的本地应用程序"));
 
 	CClientController::getInstance()->InitController();
@@ -79,13 +67,11 @@ BOOL CRemoteClientApp::InitInstance()
 
 	if (nResponse == IDOK)
 	{
-		// TODO: 在此放置处理何时用
-		//  “确定”来关闭对话框的代码
+		// TODO: 处理用户点击“确定”按钮关闭对话框后的逻辑（如保存数据）。
 	}
 	else if (nResponse == IDCANCEL)
 	{
-		// TODO: 在此放置处理何时用
-		//  “取消”来关闭对话框的代码
+		// TODO: 来关闭对话框的代码 处理用户点击“取消”按钮关闭对话框后的逻辑（如保存数据）。
 	}
 	else if (nResponse == -1)
 	{
@@ -93,18 +79,18 @@ BOOL CRemoteClientApp::InitInstance()
 		TRACE(traceAppMsg, 0, "警告: 如果您在对话框上使用 MFC 控件，则无法 #define _AFX_NO_MFC_CONTROLS_IN_DIALOGS。\n");
 	}
 
-	// 删除上面创建的 shell 管理器。
+	// 清理shell管理器
 	if (pShellManager != nullptr)
 	{
 		delete pShellManager;
 	}
 
+	//在特定条件下清理控制栏资源
 #if !defined(_AFXDLL) && !defined(_AFX_NO_MFC_CONTROLS_IN_DIALOGS)
 	ControlBarCleanUp();
 #endif
 
-	// 由于对话框已关闭，所以将返回 FALSE 以便退出应用程序，
-	//  而不是启动应用程序的消息泵。
+	//返回FALSE表示不进入主消息循环（适用于对话框应用），直接退出程序。若返回TRUE，则会启动消息泵（如文档视图架构）。
 	return FALSE;
 }
 
