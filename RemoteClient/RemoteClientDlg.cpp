@@ -124,7 +124,9 @@ BOOL CRemoteClientDlg::OnInitDialog()
 
 	// 初始化默认IP和端口
 	UpdateData();
-	m_server_address = 0x0A00020F; // 10.0.2.15（需根据实际修改）
+	//m_server_address = 0x0A00020F; // 10.0.2.15（需根据实际修改）
+	m_server_address = 0x7F000001; // 127.0.0.1（需根据实际修改）
+
 	m_nPort = _T("9527");
 	CClientController* pController = CClientController::getInstance();
 	pController->UpdataAddress(m_server_address, atoi((LPCTSTR)m_nPort));

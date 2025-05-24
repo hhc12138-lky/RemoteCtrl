@@ -89,16 +89,16 @@ int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
 		配合 WaitForSingleObject(hEvent, timeout) 可实现超时机制，避免无限等待。
 	*/
 	
-	//如果调用方未提供返回包容器，使用局部变量暂存
+	//如果调用方未提供返回包容器，使用局部变量暂存。（注意如果设置plstPacks = &lstPacks;的话 包的数据是会在跳出函数后丢失的）
 	std::list<CPacket> lstPacks;
 	if (plstPacks == NULL) 
 		plstPacks = &lstPacks;
 	// 发送CPacket包含请求，返回lstPacks
-	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent),lstPacks, bAutoClose);
+	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);
 	CloseHandle(hEvent);//回收实践句柄，防止资源耗尽
 
 	//结果处理​。如果有返回包，取第一个包的命令号作为返回值
-	if (lstPacks.size() > 0) {
+	if (plstPacks->size() > 0) {
 		return plstPacks->front().sCmd;
 	}
 	return -1;

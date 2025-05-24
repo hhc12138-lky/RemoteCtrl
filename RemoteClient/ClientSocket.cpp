@@ -49,7 +49,7 @@ bool CClientSocket::InitSocket()
 	//​​设置服务器地址
 	sockaddr_in serv_adr;
 	memset(&serv_adr, 0, sizeof(serv_adr));
-	serv_adr.sin_family = AF_INET;
+	serv_adr.sin_family = AF_INET; // 指定地址族为 IPv4（AF_INET）
 
 	TRACE("addr %08X nIP %08X\r\n", inet_addr("127.0.0.1"), m_nIP);
 	serv_adr.sin_addr.s_addr = htonl(m_nIP);
@@ -154,6 +154,24 @@ bool CClientSocket::Send(const CPacket& pack)
 	return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
 }
 
+void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
+{// TODO:定义一个消息的数据结构（数据和数据长度，模式）+回调消息的数据结构（HWND MESSAGE）
+	if (InitSocket() == true) {
+		int ret = send(m_sock, (char*)wParam, (int)lParam, 0);
+		if (ret > 0) {
+
+		}
+		else {
+			CloseSocket();
+			// 网络终止处理
+		}
+	}
+	else {
+		//TODO:错误处理
+	}
+
+}
+
 /*数据包发送与返回处理线程**********************************************************************************/
 void CClientSocket::threadEntry(void* arg)
 {
@@ -211,13 +229,19 @@ void CClientSocket::threadFunc()
 					else if (length <= 0 && index <= 0) {
 						CloseSocket();
 						SetEvent(head.hEvent);//等到服务器关闭命令之后，再通知事情完成
-						m_mapAutoClosed.erase(it0);
+						if (it0 != m_mapAutoClosed.end()) {
+							TRACE("SetEvent %d %d \r\n", head.sCmd, it0->second);
+						}
+						else {
+							TRACE("异常情况 没有对应的pair\r\n");
+						}
 						break;
 					}
 				} while (it0->second == false);
 			}
 			m_lock.lock();
 			m_lstSend.pop_front();//从发送队列中移除已经处理完成的请求包​​
+			m_mapAutoClosed.erase(head.hEvent);
 			m_lock.unlock();
 			//断线重连
 			if (InitSocket() == false) {
@@ -228,6 +252,18 @@ void CClientSocket::threadFunc()
 	}
 	CloseSocket();
 
+}
+
+void CClientSocket::threadFunc2()
+{
+	MSG msg;
+	while (::GetMessage(&msg,NULL,0,0)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+		if (m_mapFunc.find(msg.message) != m_mapFunc.end()) {
+			(this->*m_mapFunc[msg.message])(msg.message, msg.wParam, msg.lParam);
+		}
+	}
 }
 
 

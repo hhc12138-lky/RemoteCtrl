@@ -5,7 +5,7 @@
 #include"Packet.h"
 
 
-// 为​​返回 void 且接受 void* 等参数的函数指针​​创建别名 SOCKET_CALLBACK
+// 回调函数设计​：为​​返回 void 且接受 void* 等参数的函数指针​​创建别名 SOCKET_CALLBACK
 typedef void(*SOCKET_CALLBACK)(void*, int, std::list<CPacket>&, CPacket&);
 
 class CServerSocket
@@ -18,6 +18,7 @@ public:
 		return m_instance;
 	}
 
+	// 核心运行逻辑
 	int Run(SOCKET_CALLBACK callback, void* arg, short port = 9527) {
 		//套接字初始化
 		bool ret = InitSocket(port);
@@ -30,25 +31,31 @@ public:
 		std::list <CPacket> lstPackets;
 
 		// 初始化成功后，就将回调函数和参数保存到成员变量中
-		m_callback = callback;
+		m_callback = callback; // callback is &CCommand::RunCommand
 		m_arg = arg;
 
-		int count = 0;
+		int count = 0; // 重试次数计数
 		while (true) {
+			// 重试3次后失败
 			if (AcceptClient() == false) {
 				if (count >= 3) {
 					return -2;
 				}
 				count++;
 			}
+
+			// 处理客户端命令
 			int ret = DealCommand();
 			if (ret > 0) {
-				m_callback(arg, ret, lstPackets,m_packet);
+				// 调用回调函数处理业务逻辑 响应包存回lstPackets
+				m_callback(arg, ret, lstPackets, m_packet);
+				// 发送响应包
 				while (lstPackets.size() > 0) {
 					Send(lstPackets.front());
 					lstPackets.pop_front();
 				}
 			}
+			// 当前命令处理完成 就关闭当前客户端连接
 			CloseClient();
 		}
 		return 0;
@@ -56,19 +63,17 @@ public:
 protected:
 	bool InitSocket(short port) {
 		if (m_sock == -1)return false;
+
 		sockaddr_in serv_adr;
 		memset(&serv_adr, 0, sizeof(serv_adr));
 		serv_adr.sin_family = AF_INET;
-		serv_adr.sin_addr.s_addr = INADDR_ANY;
-		serv_adr.sin_port = htons(port);
-		//绑定
-		if (bind(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr)) == -1) {
-			return false;
-		}
-		if (listen(m_sock, 1) == -1) {
-			return false;
-		}
+		serv_adr.sin_addr.s_addr = INADDR_ANY; // 监听所有网卡
+		serv_adr.sin_port = htons(port);       // 端口号转网络字节序
 
+		if (bind(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr)) == -1)
+			return false;
+		if (listen(m_sock, 1) == -1)           // 允许1个连接排队
+			return false;
 		return true;
 	}
 	bool AcceptClient() {
@@ -80,26 +85,30 @@ protected:
 		if (m_client == -1)return false;
 		return true;
 	}
+
 #define BUFFER_SIZE 4096
 	int DealCommand() {
 		if (m_client == -1)return -1;
-		//char buffer[1024] = "";
-		char* buffer = new char[BUFFER_SIZE];
+		char* buffer = new char[BUFFER_SIZE];// 动态分配缓冲区
 		if (buffer == NULL) {
 			TRACE("内存不足！\r\n");
 			return -2;
 		}
 		memset(buffer, 0, BUFFER_SIZE);
 		size_t index = 0;
+
+		// 循环接受tcp包 到缓冲区中 并在每次接受后都尝试解包
 		while (true) {
 			size_t len = recv(m_client, buffer + index, BUFFER_SIZE - index, 0);
 			if (len <= 0) {
-				delete[]buffer;
+				delete[]buffer; // 接收失败
 				return -1;
 			}
 			TRACE("recv %d\r\n", len);
 			index += len;
 			len = index;
+
+			// 尝试解析数据包 若为有效命令则直接返回
 			m_packet = CPacket((BYTE*)buffer, len);
 			if (len > 0) {
 				memmove(buffer, buffer + len, BUFFER_SIZE - len);
@@ -112,6 +121,7 @@ protected:
 		return -1;
 	}
 
+	// 发送数据（字节流/包）
 	bool Send(const char* pData, int nSize) {
 		if (m_client == -1)return false;
 		return send(m_client, pData, nSize, 0) > 0;

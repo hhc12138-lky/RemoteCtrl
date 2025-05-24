@@ -7,6 +7,8 @@
 #include <map>
 #include <mutex>
 
+#define WM_SEND_PACK (WM_USER+1) // 发送包
+
 #pragma pack(push)
 #pragma pack(1)
 class CPacket
@@ -199,12 +201,14 @@ public:
 	}
 
 	void UpdataAddress(int nIP, int nPort) {
-		if ((m_nIP != m_nIP) || (m_nPort != m_nPort)) {
+		if ((m_nIP != nIP) || (m_nPort != nPort)) {
 			m_nIP = nIP;
 			m_nPort = nPort;
 		}
 	}
 private:
+	typedef void(CClientSocket::* MSGFUNC)(UINT, WPARAM, LPARAM);
+	std::map<UINT, MSGFUNC> m_mapFunc;
 	HANDLE m_hThread;
 	bool m_bAutoClose;
 	std::mutex m_lock;
@@ -220,10 +224,20 @@ private:
 	CPacket m_packet;
 	CClientSocket& operator=(const CClientSocket& ss) {}
 	CClientSocket(const CClientSocket& ss) {
+		m_hThread = INVALID_HANDLE_VALUE;
 		m_bAutoClose = ss.m_bAutoClose;
 		m_sock = ss.m_sock;
 		m_nIP = ss.m_nIP;
 		m_nPort = ss.m_nPort;
+		struct{
+			UINT message;
+			MSGFUNC func;
+		}funcs[] = {
+			{WM_SEND_PACK,&CClientSocket::SendPack},
+		};
+		for (auto& func : funcs) {
+            m_mapFunc[func.message] = func.func;
+		}
 	}
 	CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true), m_hThread(INVALID_HANDLE_VALUE){
 		if (InitSockEnv() == FALSE) {
@@ -242,6 +256,7 @@ private:
 	//发送数据包并处理服务器响应的线程
 	static void threadEntry(void* arg);
 	void threadFunc();
+	void threadFunc2();
 
 	BOOL InitSockEnv() {
 		WSADATA data;
@@ -262,6 +277,7 @@ private:
 		return send(m_sock, pData, nSize, 0) > 0;
 	}
 	bool Send(const CPacket& pack);
+	void SendPack(UINT nMSg, WPARAM wParam/*缓冲区的值*/, LPARAM lParam/*缓冲区的长度*/);
 	static CClientSocket* m_instance;
 	class CHelper {
 	public:
