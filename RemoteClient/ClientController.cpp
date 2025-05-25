@@ -65,7 +65,7 @@ LRESULT CClientController::SendMessage(MSG msg)
 }
 
 // 命令发送​
-bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
+bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
 {
 	/*
 	int nCmd,           // 命令类型编号（如1=查看磁盘分区，6=获取屏幕内容等）
@@ -78,7 +78,7 @@ bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, 
 	CClientSocket* pClient = CClientSocket::getInstance();
 	
 	// 发送CPacket包含请求，返回lstPacks
-	return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose);
+	return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);
 }
 
 /*视频监控线程********************************************************************************************************/
@@ -128,6 +128,13 @@ void CClientController::StartWatchScreen()
 	WaitForSingleObject(m_hThreadWatch, 500); // 等待最多500ms让线程安全退出
 }
 
+void CClientController::DownloadEnd()
+{
+	m_statusDlg.ShowWindow(SW_HIDE);
+	m_remoteDlg.EndWaitCursor();
+	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
+}
+
 /*文件下载线程********************************************************************************************************/
 void CClientController::threadDownloadFile()
 {
@@ -144,7 +151,7 @@ void CClientController::threadDownloadFile()
 	CClientSocket* pClient = CClientSocket::getInstance();
 	do {
 		// 发送下载命令
-		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
+		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);
 		// 获取文件总长度(服务器返回的第一个数据包中包含文件大小)
 		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();
 		if (nLength == 0) {
@@ -191,13 +198,19 @@ int CClientController::DownFile(CString strPath)
 		m_strRemote = strPath; // 获取用户选择的远程文件路径
 		m_strLocal = dlg.GetPathName(); // 获取用户选择的本地保存路径
 
-		// 创建下载线程 指定threadDownloadEntry为中转函数 传递this指针以便访问成员变量
-		m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-
-		// 立即检查下载线程是否已经意外终止
-		if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
+		FILE* pFile = fopen(m_strLocal, "wb+");
+		if (pFile == NULL) {
+			AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！！"));
 			return -1;
 		}
+		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);
+		// 创建下载线程 指定threadDownloadEntry为中转函数 传递this指针以便访问成员变量
+		//m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+
+		// 立即检查下载线程是否已经意外终止
+		//if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
+		//	return -1;
+		//}
 
 		// UI状态更新​
 		m_remoteDlg.BeginWaitCursor();  // 显示等待光标

@@ -139,7 +139,7 @@ int CClientSocket::DealCommand()
 	}
 	return -1;
 }
-bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed)
+bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed, WPARAM wParam)
 {
 	if (m_hThread == INVALID_HANDLE_VALUE) {
 		m_hThread = (HANDLE)_beginthreadex(NULL,0,&CClientSocket::threadEntry, this, 0,&m_nThreadID);
@@ -147,7 +147,7 @@ bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed
 	UINT nMode = isAutoClosed ? CSM_AUTOCLOSE : 0;
 	std::string strOut;
 	pack.Data(strOut);
-	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(),nMode), (LPARAM)hWnd);
+	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(),nMode, wParam), (LPARAM)hWnd);
 }
 /*
 bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed)
@@ -213,7 +213,7 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 					size_t nLen = index;
 					CPacket pack((BYTE*)pBuffer, nLen);
 					if (nLen > 0) {
-						::SendMessage(hWnd, WM_SEND_ACK, (WPARAM)new CPacket(pack), 0);
+						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
 						if (data.nMode == CSM_AUTOCLOSE) {
 							CloseSocket();
 							return;
@@ -224,7 +224,7 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 				}
 				else {//TODO:对方关闭了套接字 或者 网络设备异常
 					CloseSocket();
-					::SendMessage(hWnd, WM_SEND_ACK, NULL, 1);
+					::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, 1);
 
 				}
 			}
@@ -232,11 +232,11 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 		else {
 			CloseSocket();
 			// 网络终止处理
-			::SendMessage(hWnd, WM_SEND_ACK, NULL, -1);
+			::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -1);
 		}
 	}
 	else {
-		::SendMessage(hWnd, WM_SEND_ACK, NULL, -2);
+		::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -2);
 
 	}
 

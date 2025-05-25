@@ -45,6 +45,7 @@ BEGIN_MESSAGE_MAP(CWatchDialog, CDialog)
 	ON_STN_CLICKED(IDC_WATCH, &CWatchDialog::OnStnClickedWatch)  // 图片控件点击
 	ON_BN_CLICKED(IDC_BTN_LOCK, &CWatchDialog::OnBnClickedBtnLock)    // "锁定"按钮点击
 	ON_BN_CLICKED(IDC_BTN_UNLOCK, &CWatchDialog::OnBnClickedBtnUnlock) // "解锁"按钮点击
+	ON_MESSAGE(WM_SEND_PACK_ACK,&CWatchDialog::OnSendPackAck)
 END_MESSAGE_MAP()
 
 
@@ -75,33 +76,76 @@ BOOL CWatchDialog::OnInitDialog()
 {
 	CDialog::OnInitDialog();  // 调用基类初始化
 	m_isFull = false;         // 初始非全屏模式
-	SetTimer(0, 45, NULL);    // 启动定时器（ID=0，间隔45ms）
+	//SetTimer(0, 45, NULL);    // 启动定时器（ID=0，间隔45ms）
 	return TRUE;  // 返回 TRUE 表示初始化成功
 }
 
 // 定时器处理（屏幕更新）​
 void CWatchDialog::OnTimer(UINT_PTR nIDEvent)
 {
-	if (nIDEvent == 0) {  // 检查定时器ID
-		CClientController* pParent = CClientController::getInstance();
-		if (m_isFull) {  // 如果处于全屏模式
-			CRect rect;
-			m_picture.GetWindowRect(rect);  // 获取图片控件尺寸
-			m_nObjWidth = m_image.GetWidth();   // 获取远程图像宽度
-			m_nObjHeight = m_image.GetHeight(); // 获取远程图像高度
+	//if (nIDEvent == 0) {  // 检查定时器ID
+	//	CClientController* pParent = CClientController::getInstance();
+	//	if (m_isFull) {  // 如果处于全屏模式
+	//		CRect rect;
+	//		m_picture.GetWindowRect(rect);  // 获取图片控件尺寸
+	//		m_nObjWidth = m_image.GetWidth();   // 获取远程图像宽度
+	//		m_nObjHeight = m_image.GetHeight(); // 获取远程图像高度
 
-			// 拉伸图像到控件大小
-			m_image.StretchBlt(
-				m_picture.GetDC()->GetSafeHdc(),  // 目标设备上下文
-				0, 0, rect.Width(), rect.Height(), // 目标位置和尺寸
-				SRCCOPY  // 直接复制
-			);
-			m_picture.InvalidateRect(NULL);  // 强制重绘
-			m_image.Destroy();  // 销毁图像
-			m_isFull = false;   // 重置全屏标志
+	//		// 拉伸图像到控件大小
+	//		m_image.StretchBlt(
+	//			m_picture.GetDC()->GetSafeHdc(),  // 目标设备上下文
+	//			0, 0, rect.Width(), rect.Height(), // 目标位置和尺寸
+	//			SRCCOPY  // 直接复制
+	//		);
+	//		m_picture.InvalidateRect(NULL);  // 强制重绘
+	//		m_image.Destroy();  // 销毁图像
+	//		m_isFull = false;   // 重置全屏标志
+	//	}
+	//}
+	CDialog::OnTimer(nIDEvent);  // 调用基类处理
+}
+
+LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lParam)
+{
+	if (lParam == -1 || lParam == -2) {
+		//TODO：错误处理
+	}
+	else if (lParam == 1) {
+		// 对方关闭了套接字
+	}else {
+		CPacket* pPacket = (CPacket*)wParam;
+		if (pPacket != NULL) {
+			switch (pPacket->sCmd) {
+			case 6:
+			{
+				if (m_isFull) {
+					CEdoyunTool::Bytes2Image(m_image, pPacket->strData);
+					CRect rect;
+					m_picture.GetWindowRect(rect);  // 获取图片控件尺寸
+					m_nObjWidth = m_image.GetWidth();   // 获取远程图像宽度
+					m_nObjHeight = m_image.GetHeight(); // 获取远程图像高度
+
+					// 拉伸图像到控件大小
+					m_image.StretchBlt(
+						m_picture.GetDC()->GetSafeHdc(),  // 目标设备上下文
+						0, 0, rect.Width(), rect.Height(), // 目标位置和尺寸
+						SRCCOPY  // 直接复制
+					);
+					m_picture.InvalidateRect(NULL);  // 强制重绘
+					m_image.Destroy();  // 销毁图像
+					m_isFull = false;   // 重置全屏标志
+				}
+				break;
+			}
+			case 5:
+			case 7:
+			case 8:
+			default:
+				break;
+			}
 		}
 	}
-	CDialog::OnTimer(nIDEvent);  // 调用基类处理
+	return 0;
 }
 
 // 左键双击​

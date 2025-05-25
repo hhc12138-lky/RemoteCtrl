@@ -8,7 +8,7 @@
 #include <mutex>
 
 #define WM_SEND_PACK (WM_USER+1) // 发送包
-#define WM_SEND_ACK (WM_USER+2) // 发送包数据应答
+#define WM_SEND_PACK_ACK (WM_USER+2) // 发送包数据应答
 
 #pragma pack(push)
 #pragma pack(1)
@@ -159,19 +159,24 @@ enum {
 typedef struct PacketData{
 	std::string strData;
 	UINT nMode;
-	PacketData(const char* pData, size_t nLen, UINT mode) {
+	WPARAM wParam;
+	PacketData(const char* pData, size_t nLen, UINT mode, WPARAM nParam = 0) {
 		strData.resize(nLen);
 		memcpy((char*)strData.c_str(), pData, nLen);
         nMode = mode;
+		wParam = nParam;
 	}
-	PacketData(const PacketData& pack) {
-        strData = pack.strData;
-        nMode = pack.nMode;
+	PacketData(const PacketData& data) {
+        strData = data.strData;
+        nMode = data.nMode;
+		wParam = data.wParam;
 	}
     PacketData& operator=(const PacketData& data) { 
 		if (this != &data) {
             strData = data.strData;
             nMode = data.nMode;
+			wParam = data.wParam;
+
 		}
         return *this;
 	}
@@ -197,7 +202,7 @@ public:
 	int DealCommand();
 
 	//bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed = true);
-	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed = true);
+	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed = true, WPARAM wParam = 0);
 	bool GetFilePath(std::string& strPath) {
 		//解析包数据为路径 通过引用返回
 		if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {

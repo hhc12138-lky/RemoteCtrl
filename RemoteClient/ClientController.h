@@ -52,7 +52,7 @@ public:
 	1981 测试连接
 	返回值：消息发送状态
 	*/
-	bool SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
+	bool SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0, WPARAM wParam = 0);
 
 	// 获取客户端网络层的数据包转为图像对象
 	int GetImage(CImage& image) {
@@ -63,6 +63,7 @@ public:
 	// 开始屏幕监控
 	void StartWatchScreen();
 
+	void DownloadEnd();
 	// 下载文件
 	int DownFile(CString strPath);
 
