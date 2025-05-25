@@ -155,7 +155,13 @@ bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed
 	pack.Data(strOut);
 	// PostThreadMessage相比于SendMessage，PostThreadMessage不会阻塞线程，也不关心发送后有没有送达；而SendMessage会阻塞线程，保证送达。
 	// 为了实现跨线程的消息发送，这里把pack在堆上new了个对象，包装后发送，记得要在消息处理线程中，处理完成后delete掉
-	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(),nMode, wParam), (LPARAM)hWnd);
+	PACKET_DATA* pData = new PACKET_DATA(strOut.c_str(), strOut.size(),nMode, wParam);
+	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)pData, (LPARAM)hWnd);
+	if (ret == false) {
+		//发送失败也要删除堆对象
+		delete pData;
+	}
+
 	return ret;
 }
 /*
@@ -204,6 +210,7 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 {// TODO:定义一个消息的数据结构（数据和数据长度，模式）+回调消息的数据结构（HWND MESSAGE）
 	PACKET_DATA data = *(PACKET_DATA*)wParam;
 	delete (PACKET_DATA*)wParam;
+
 	HWND hWnd = (HWND)lParam;
 
 	if (InitSocket() == true) {
@@ -344,6 +351,9 @@ void CClientSocket::threadFunc2()
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 		if (m_mapFunc.find(msg.message) != m_mapFunc.end()) {
+			/* m_mapFunc会包含的函数有：
+			{WM_SEND_PACK,&CClientSocket::SendPack}
+			*/
 			(this->*m_mapFunc[msg.message])(msg.message, msg.wParam, msg.lParam);
 		}
 	}

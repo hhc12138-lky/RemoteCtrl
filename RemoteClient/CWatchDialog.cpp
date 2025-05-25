@@ -113,31 +113,32 @@ LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 	else if (lParam == 1) {
 		// 对方关闭了套接字
 	}else {
-		CPacket* pPacket = (CPacket*)wParam;
-		if (pPacket != NULL) {
-			switch (pPacket->sCmd) {
+		if (wParam != NULL) {
+			CPacket head = *(CPacket*)wParam;
+			delete (CPacket*)wParam;; // 为了数据包的跨线程通信，发送线程那边制造了个堆对象，在这里获得后需要释放内存
+
+			switch (head.sCmd) {
 			case 6:
 			{
-				if (m_isFull) {
-					CEdoyunTool::Bytes2Image(m_image, pPacket->strData);
-					CRect rect;
-					m_picture.GetWindowRect(rect);  // 获取图片控件尺寸
-					m_nObjWidth = m_image.GetWidth();   // 获取远程图像宽度
-					m_nObjHeight = m_image.GetHeight(); // 获取远程图像高度
+				CEdoyunTool::Bytes2Image(m_image, head.strData);
+				CRect rect;
+				m_picture.GetWindowRect(rect);  // 获取图片控件尺寸
+				m_nObjWidth = m_image.GetWidth();   // 获取远程图像宽度
+				m_nObjHeight = m_image.GetHeight(); // 获取远程图像高度
 
-					// 拉伸图像到控件大小
-					m_image.StretchBlt(
-						m_picture.GetDC()->GetSafeHdc(),  // 目标设备上下文
-						0, 0, rect.Width(), rect.Height(), // 目标位置和尺寸
-						SRCCOPY  // 直接复制
-					);
-					m_picture.InvalidateRect(NULL);  // 强制重绘
-					m_image.Destroy();  // 销毁图像
-					m_isFull = false;   // 重置全屏标志
-				}
+				// 拉伸图像到控件大小
+				m_image.StretchBlt(
+					m_picture.GetDC()->GetSafeHdc(),  // 目标设备上下文
+					0, 0, rect.Width(), rect.Height(), // 目标位置和尺寸
+					SRCCOPY  // 直接复制
+				);
+				m_picture.InvalidateRect(NULL);  // 强制重绘
+				m_image.Destroy();  // 销毁图像
 				break;
 			}
 			case 5:
+				TRACE("远程端应答了鼠标操作\r\n");
+				break;
 			case 7:
 			case 8:
 			default:
@@ -152,7 +153,11 @@ LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 void CWatchDialog::OnLButtonDblClk(UINT nFlags, CPoint point)
 {
 	if ((m_nObjWidth != -1) && (m_nObjHeight != -1)) {  // 检查是否已获取远程分辨率
+		TRACE("point: x=%d y=%d \r\n", point.x, point.y);
 		CPoint remote = UserPoint2RemoteScreenPoint(point);  // 坐标转换
+		TRACE("point after convert: x=%d y=%d \r\n", point.x, point.y);
+		TRACE("remote after convert: x=%d y=%d \r\n", remote.x, remote.y);
+
 		MOUSEEV event;
 		event.ptXY = remote;  // 远程坐标
 		event.nButton = 0;    // 左键

@@ -86,25 +86,22 @@ bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, 
 void CClientController::threadWatchScreen()
 {
 	Sleep(50);
+	ULONGLONG nTick = GetTickCount64();
 	while (!m_isClosed) {
 		//当监视未关闭时，更新数据到缓存
 		if (m_watchDlg.isFull() == false) {
-			// 发送屏幕请求命令，lstPacks存储返回数据包列表
-			std::list<CPacket> lstPacks;
+			// 发送图片 休眠50ms一张图片
+			if (GetTickCount64() - nTick < 200) {
+				Sleep(200 - DWORD(GetTickCount64() - nTick));
+			}
+			nTick = GetTickCount64();
+
 			int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(),6, true, NULL, 0);
-			//TODO 添加消息响应函数 WM_SEND_PACK_ACK
-			// //TODO 控制发送频率
-			// 处理服务端返回
-			if (ret == 6) {
-				if (CEdoyunTool::Bytes2Image(m_watchDlg.GetImage(), lstPacks.front().strData) == 0) {
-					m_watchDlg.SetImageStatus(true);
-				}
-				else {
-					TRACE("获取数据失败! %d\r\n",ret);
-				}
+			if (ret == 1) {
+				//TRACE("成功发送图片请求命令\r\n");
 			}
 			else {
-				TRACE("获取数据失败!\r\n");
+				TRACE("获取数据失败! %d\r\n", ret);
 			}
 		}
 		else Sleep(1);

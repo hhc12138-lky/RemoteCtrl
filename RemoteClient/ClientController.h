@@ -162,7 +162,7 @@ private:
 	// 用于消息处理的 “函数指针类型”
 	typedef LRESULT(CClientController::* MSGFUNC)(UINT, WPARAM, LPARAM);
 	static std::map<UINT, MSGFUNC> m_mapFunc;// 消息映射表
-	CWatchDialog m_watchDlg;// 监控对话框
+	CWatchDialog m_watchDlg;// 监控对话框 // TODO:消息包在对话框关闭后可能导致内存泄漏
 	CRemoteClientDlg m_remoteDlg;// 主对话框
 	CStatusDlg m_statusDlg;// 状态对话框
 
