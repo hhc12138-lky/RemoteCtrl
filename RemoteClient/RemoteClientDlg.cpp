@@ -454,11 +454,11 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 		// 对方关闭了套接字
 	}
 	else {
-		CPacket* pPacket = (CPacket*)wParam;
-		if (pPacket != NULL) {
-			CPacket& head = *pPacket;
+		if (wParam != NULL) {
+			CPacket head = *(CPacket*)wParam;
+			delete (CPacket*)wParam;; // 为了数据包的跨线程通信，发送线程那边制造了个堆对象，在这里获得后需要释放内存
 
-			switch (pPacket->sCmd) {
+			switch (head.sCmd) {
 			case 1:// 获取驱动信息
 			{
 				// 解析服务器返回的驱动器列表

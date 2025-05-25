@@ -53,6 +53,15 @@ CClientSocket::CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SO
 		MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
 		exit(0);
 	}
+
+	// 创建专用于数据包处理于响应的线程 使用m_eventInvoke事件机制监控是否启动
+	m_eventInvoke = CreateEvent(NULL, FALSE, FALSE, NULL);// 属性为null，自动重置为true，初始值为false，名称为null
+	m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);
+	if (WaitForSingleObject(m_eventInvoke, 100) == WAIT_TIMEOUT) {
+		TRACE("网络消息处理线程启动失败! \r\n");
+	}
+	CloseHandle(m_eventInvoke);// 关闭事件句柄
+
 	m_buffer.resize(BUFFER_SIZE);
 	memset(m_buffer.data(), 0, BUFFER_SIZE);
 	struct {
@@ -141,13 +150,13 @@ int CClientSocket::DealCommand()
 }
 bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed, WPARAM wParam)
 {
-	if (m_hThread == INVALID_HANDLE_VALUE) {
-		m_hThread = (HANDLE)_beginthreadex(NULL,0,&CClientSocket::threadEntry, this, 0,&m_nThreadID);
-	}
 	UINT nMode = isAutoClosed ? CSM_AUTOCLOSE : 0;
 	std::string strOut;
 	pack.Data(strOut);
-	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(),nMode, wParam), (LPARAM)hWnd);
+	// PostThreadMessage相比于SendMessage，PostThreadMessage不会阻塞线程，也不关心发送后有没有送达；而SendMessage会阻塞线程，保证送达。
+	// 为了实现跨线程的消息发送，这里把pack在堆上new了个对象，包装后发送，记得要在消息处理线程中，处理完成后delete掉
+	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(),nMode, wParam), (LPARAM)hWnd);
+	return ret;
 }
 /*
 bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed)
@@ -213,7 +222,8 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 					size_t nLen = index;
 					CPacket pack((BYTE*)pBuffer, nLen);
 					if (nLen > 0) {
-						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
+						// 为了实现跨线程的消息发送，这里把pack在堆上new了个对象，包装后发送，记得要在消息处理线程中，处理完成后delete掉
+						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam); 
 						if (data.nMode == CSM_AUTOCLOSE) {
 							CloseSocket();
 							return;
@@ -324,21 +334,11 @@ void CClientSocket::threadFunc()
 	CloseSocket();
 }
 */
-/*
-* 
-原先threadFunc()开了个线程，发送请求包并且处理响应包。但是有些缺陷：
-	比如发送大文件时，其他消息的发送请求包会阻塞之后的recv操作。
-	同时，各个资源（成员变量）的处理和访问流程耦合度太高了，难以处理
 
-现在用消息处理的方式重构发送包和响应包的过程，实现解耦。
-发送时，在携带请求的时候，同时指定返回包中处了返回数据，还有需要用那个消息对象来通知发送方。
-接着，发送方（就是Client代码这里）就根据响应包中指定的消息对象的函数通过回调函数来处理返回数据。
-
-*/
 
 void CClientSocket::threadFunc2()
 {
-
+	SetEvent(m_eventInvoke); // 线程启动了 通知下外层的WaitForSingleObject
 	MSG msg;
 	while (::GetMessage(&msg,NULL,0,0)) {
 		TranslateMessage(&msg);

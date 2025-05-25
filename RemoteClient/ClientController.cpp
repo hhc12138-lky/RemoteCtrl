@@ -78,7 +78,8 @@ bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, 
 	CClientSocket* pClient = CClientSocket::getInstance();
 	
 	// 发送CPacket包含请求，返回lstPacks
-	return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);
+	bool ret =  pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);
+	return ret;
 }
 
 /*视频监控线程********************************************************************************************************/

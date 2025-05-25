@@ -12,6 +12,8 @@
 
 #pragma pack(push)
 #pragma pack(1)
+
+// 协议化的网络数据包 用于网络传输
 class CPacket
 {
 public:
@@ -156,6 +158,7 @@ enum {
 	CSM_AUTOCLOSE=1//CSM = CLient Socket Mode 自动关闭模式
 };
 
+// 轻量级数据容器，通过wParam传递Windows消息参数；作为消息队列中的数据类型，用于线程间通信。
 typedef struct PacketData{
 	std::string strData;
 	UINT nMode;
@@ -234,6 +237,7 @@ public:
 		}
 	}
 private:
+	HANDLE m_eventInvoke;// 线程通信事件
 	UINT m_nThreadID;
 	typedef void(CClientSocket::* MSGFUNC)(UINT, WPARAM, LPARAM);
 	std::map<UINT, MSGFUNC> m_mapFunc;
