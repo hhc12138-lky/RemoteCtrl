@@ -65,7 +65,7 @@ LRESULT CClientController::SendMessage(MSG msg)
 }
 
 // 命令发送​
-int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, std::list<CPacket>* plstPacks)
+bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
 {
 	/*
 	int nCmd,           // 命令类型编号（如1=查看磁盘分区，6=获取屏幕内容等）
@@ -76,32 +76,9 @@ int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
 	*/
 	//获取全局唯一的Socket通信实例
 	CClientSocket* pClient = CClientSocket::getInstance();
-	//创建同步事件对象​，实现命令发送与响应的线程间同步 
-	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 	
-	/*hEvent 的三大作用​​
-	​​1. 同步等待服务器响应​​
-		当客户端发送命令包后，可能需要等待服务器处理并返回结果。
-		hEvent 作为一个同步信号，服务器完成处理后触发该事件，通知客户端线程可以继续执行。
-	​​2. 跨线程通信的协调​​
-		如果 SendPacket 内部使用异步I/O或工作线程发送数据，hEvent 用于通知主线程“数据已发送完成”或“响应已到达”。
-	​​3. 超时控制​​
-		配合 WaitForSingleObject(hEvent, timeout) 可实现超时机制，避免无限等待。
-	*/
-	
-	//如果调用方未提供返回包容器，使用局部变量暂存。（注意如果设置plstPacks = &lstPacks;的话 包的数据是会在跳出函数后丢失的）
-	std::list<CPacket> lstPacks;
-	if (plstPacks == NULL) 
-		plstPacks = &lstPacks;
 	// 发送CPacket包含请求，返回lstPacks
-	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);
-	CloseHandle(hEvent);//回收实践句柄，防止资源耗尽
-
-	//结果处理​。如果有返回包，取第一个包的命令号作为返回值
-	if (plstPacks->size() > 0) {
-		return plstPacks->front().sCmd;
-	}
-	return -1;
+	return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose);
 }
 
 /*视频监控线程********************************************************************************************************/
@@ -113,7 +90,9 @@ void CClientController::threadWatchScreen()
 		if (m_watchDlg.isFull() == false) {
 			// 发送屏幕请求命令，lstPacks存储返回数据包列表
 			std::list<CPacket> lstPacks;
-			int ret = SendCommandPacket(6,true,NULL,0,&lstPacks);
+			int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(),6, true, NULL, 0);
+			//TODO 添加消息响应函数 WM_SEND_PACK_ACK
+			// //TODO 控制发送频率
 			// 处理服务端返回
 			if (ret == 6) {
 				if (CEdoyunTool::Bytes2Image(m_watchDlg.GetImage(), lstPacks.front().strData) == 0) {
@@ -165,7 +144,7 @@ void CClientController::threadDownloadFile()
 	CClientSocket* pClient = CClientSocket::getInstance();
 	do {
 		// 发送下载命令
-		int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
+		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
 		// 获取文件总长度(服务器返回的第一个数据包中包含文件大小)
 		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();
 		if (nLength == 0) {

@@ -39,7 +39,7 @@ public:
 		CClientSocket::getInstance()->CloseSocket();
 	}
 
-	/*
+	/* 发送各种控制命令到服务器
 	1 查看磁盘分区
 	2 查看指定目录下的文件
 	3 打开文件
@@ -50,11 +50,9 @@ public:
 	7 锁机
 	8 解锁
 	1981 测试连接
-	返回值：是命令号，如果小于0则是错误
+	返回值：消息发送状态
 	*/
-	
-	// 发送各种控制命令到服务器
-	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0, std::list<CPacket>* plstPacks=NULL);
+	bool SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
 
 	// 获取客户端网络层的数据包转为图像对象
 	int GetImage(CImage& image) {
@@ -129,6 +127,7 @@ protected:
 	LRESULT OnShowWatcher(UINT nMsg, WPARAM wParam, LPARAM lParam);// 监控对话框消息处理
 	/*
 	LRESULT 是一个长指针类型（LONG_PTR），通常用于表示消息处理的结果。
+
 	WPARAM 是一个无符号整数指针类型（UINT_PTR），通常用于传递消息或函数调用的第一个附加参数。
 	LPARAM 是一个长指针类型（LONG_PTR），通常用于传递消息或函数调用的附加参数（第二个）。
 	如果需要传递更复杂的数据，可以将数据封装到一个结构体中，并通过 LPARAM 传递该结构体的指针。

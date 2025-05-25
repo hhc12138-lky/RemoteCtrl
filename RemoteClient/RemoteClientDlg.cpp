@@ -183,14 +183,14 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 // 测试按钮响应函数
 void CRemoteClientDlg::OnBnClickedBtnTest()
 {
-	CClientController::getInstance()->SendCommandPacket(1981); // 发送测试命令（1981）
+	CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 1981); // 发送测试命令（1981）
 }
 
 // 获取文件信息
 void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
 	std::list<CPacket> lstPackets;
-	int ret = CClientController::getInstance()->SendCommandPacket(1, true, NULL, 0, &lstPackets);
+	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 1, true, NULL, 0);
 	if (ret == -1 || lstPackets.empty()) {
 		AfxMessageBox(_T("命令处理失败!!!"));
 		return;
@@ -230,7 +230,7 @@ void CRemoteClientDlg::LoadFileCurrent()
 	m_List.DeleteAllItems();  // 清空列表
 
 	// 发送请求获取文件列表。SendCommandPacket(2)​​：请求服务器返回指定路径的文件列表。
-	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength());
+	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength());
 	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 
 	// 遍历文件列表
@@ -275,13 +275,7 @@ void CRemoteClientDlg::LoadFileInfo()
 
 	// 发送命令获取该路径下的文件列表
 	std::list<CPacket> lstPackets;
-	int nCmd = CClientController::getInstance()->SendCommandPacket(
-		2,  // 命令码2：获取文件列表
-		false,
-		(BYTE*)(LPCTSTR)strPath,
-		strPath.GetLength(),
-		&lstPackets
-	);
+	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(),2, false,(BYTE*)(LPCTSTR)strPath,strPath.GetLength());
 
 	// 遍历返回的文件信息
 	if (lstPackets.size() > 0) {
@@ -402,6 +396,7 @@ void CRemoteClientDlg::OnDeleteFile()
 
 	// 发送删除命令
 	int ret = CClientController::getInstance()->SendCommandPacket(
+		GetSafeHwnd(),
 		9,  // 命令码9：删除文件
 		true,
 		(BYTE*)(LPCSTR)strFile,
@@ -426,6 +421,7 @@ void CRemoteClientDlg::OnRunFile()
 
 	// 发送运行命令
 	int ret = CClientController::getInstance()->SendCommandPacket(
+		GetSafeHwnd(),
 		3,  // 命令码3：运行文件
 		true,
 		(BYTE*)(LPCSTR)strFile,

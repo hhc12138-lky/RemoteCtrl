@@ -37,6 +37,34 @@ void Dump(BYTE* pData, size_t nSize)
 	OutputDebugStringA(strOut.c_str());
 }
 
+CClientSocket::CClientSocket(const CClientSocket& ss) {
+	m_hThread = INVALID_HANDLE_VALUE;
+	m_bAutoClose = ss.m_bAutoClose;
+	m_sock = ss.m_sock;
+	m_nIP = ss.m_nIP;
+	m_nPort = ss.m_nPort;
+	for (auto it = m_mapFunc.begin(); it != m_mapFunc.end(); it++) {
+		m_mapFunc.insert(std::pair<UINT, MSGFUNC>(it->first, it->second));
+	}
+}
+
+CClientSocket::CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true), m_hThread(INVALID_HANDLE_VALUE) {
+	if (InitSockEnv() == FALSE) {
+		MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
+		exit(0);
+	}
+	m_buffer.resize(BUFFER_SIZE);
+	memset(m_buffer.data(), 0, BUFFER_SIZE);
+	struct {
+		UINT message;
+		MSGFUNC func;
+	}funcs[] = {
+		{WM_SEND_PACK,&CClientSocket::SendPack},
+	};
+	for (auto& func : funcs) {
+		m_mapFunc[func.message] = func.func;
+	}
+}
 bool CClientSocket::InitSocket()
 {
 	/*初始化并连接Socket​*/
@@ -61,13 +89,13 @@ bool CClientSocket::InitSocket()
 	}
 
 	//建立连接
-	int ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr));
-	if (ret == -1) {
-		AfxMessageBox("连接失败!");
-		TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
-		return false;
-	}
-	return true;
+int ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr));
+if (ret == -1) {
+	AfxMessageBox("连接失败!");
+	TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
+	return false;
+}
+return true;
 }
 
 int CClientSocket::DealCommand()
@@ -111,16 +139,24 @@ int CClientSocket::DealCommand()
 	}
 	return -1;
 }
-
+bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed)
+{
+	if (m_hThread == INVALID_HANDLE_VALUE) {
+		m_hThread = (HANDLE)_beginthreadex(NULL,0,&CClientSocket::threadEntry, this, 0,&m_nThreadID);
+	}
+	UINT nMode = isAutoClosed ? CSM_AUTOCLOSE : 0;
+	std::string strOut;
+	pack.Data(strOut);
+	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(),nMode), (LPARAM)hWnd);
+}
+/*
 bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed)
 {
-	/* 将数据包加入发送队列，并通过事件对象(hEvent)实现同步等待响应。仅由CClientController::SendCommandPacket内部调用 */
 
 	// 如果Socket未连接且工作线程未启动，创建新的工作线程（懒初始化）
 	if (m_sock == INVALID_SOCKET && m_hThread == INVALID_HANDLE_VALUE) {
 		m_hThread = (HANDLE)_beginthread(&CClientSocket::threadEntry, 0, this);
 	}
-
 	m_lock.lock();// 互斥锁(m_lock)保护共享资源
 	// 将事件句柄与返回包列表关联 注意这里存的是&，所以后续操作m_mapAck的元素时会影响到lstPacks
 	// 实际上，就在CClientSocket::threadFunc()中会将接受到的包插入m_mapAck->senond中
@@ -143,6 +179,7 @@ bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks
 	}
 	return false;
 }
+*/
 
 bool CClientSocket::Send(const CPacket& pack)
 {
@@ -156,30 +193,64 @@ bool CClientSocket::Send(const CPacket& pack)
 
 void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 {// TODO:定义一个消息的数据结构（数据和数据长度，模式）+回调消息的数据结构（HWND MESSAGE）
-	if (InitSocket() == true) {
-		int ret = send(m_sock, (char*)wParam, (int)lParam, 0);
-		if (ret > 0) {
+	PACKET_DATA data = *(PACKET_DATA*)wParam;
+	delete (PACKET_DATA*)wParam;
+	HWND hWnd = (HWND)lParam;
 
+	if (InitSocket() == true) {
+		
+		int ret = send(m_sock, (char*)data.strData.c_str(), (int)data.strData.size(), 0);
+		if (ret > 0) {
+			size_t index = 0;
+			std::string strBuffer;
+			strBuffer.resize(BUFFER_SIZE);
+			char* pBuffer = (char*)strBuffer.c_str();
+
+			while (m_sock != INVALID_SOCKET) {
+				int length = recv(m_sock, pBuffer, BUFFER_SIZE - index, 0);
+				if (length > 0 || index >0){
+					index += (size_t) length;
+					size_t nLen = index;
+					CPacket pack((BYTE*)pBuffer, nLen);
+					if (nLen > 0) {
+						::SendMessage(hWnd, WM_SEND_ACK, (WPARAM)new CPacket(pack), 0);
+						if (data.nMode == CSM_AUTOCLOSE) {
+							CloseSocket();
+							return;
+						}
+					}
+					index -= nLen;
+					memmove(pBuffer, pBuffer + index, nLen);
+				}
+				else {//TODO:对方关闭了套接字 或者 网络设备异常
+					CloseSocket();
+					::SendMessage(hWnd, WM_SEND_ACK, NULL, 1);
+
+				}
+			}
 		}
 		else {
 			CloseSocket();
 			// 网络终止处理
+			::SendMessage(hWnd, WM_SEND_ACK, NULL, -1);
 		}
 	}
 	else {
-		//TODO:错误处理
+		::SendMessage(hWnd, WM_SEND_ACK, NULL, -2);
+
 	}
 
 }
 
 /*数据包发送与返回处理线程**********************************************************************************/
-void CClientSocket::threadEntry(void* arg)
+unsigned CClientSocket::threadEntry(void* arg)
 {
 	CClientSocket* thiz = (CClientSocket*)arg;
-	thiz->threadFunc();
-	//_endthread();
+	thiz->threadFunc2();
+	_endthreadex(0);
+	return 0;
 }
-
+/*
 void CClientSocket::threadFunc()
 {
 	// 缓冲区管理
@@ -251,11 +322,23 @@ void CClientSocket::threadFunc()
 		Sleep(1);
 	}
 	CloseSocket();
-
 }
+*/
+/*
+* 
+原先threadFunc()开了个线程，发送请求包并且处理响应包。但是有些缺陷：
+	比如发送大文件时，其他消息的发送请求包会阻塞之后的recv操作。
+	同时，各个资源（成员变量）的处理和访问流程耦合度太高了，难以处理
+
+现在用消息处理的方式重构发送包和响应包的过程，实现解耦。
+发送时，在携带请求的时候，同时指定返回包中处了返回数据，还有需要用那个消息对象来通知发送方。
+接着，发送方（就是Client代码这里）就根据响应包中指定的消息对象的函数通过回调函数来处理返回数据。
+
+*/
 
 void CClientSocket::threadFunc2()
 {
+
 	MSG msg;
 	while (::GetMessage(&msg,NULL,0,0)) {
 		TranslateMessage(&msg);
