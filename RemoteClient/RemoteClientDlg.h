@@ -23,13 +23,14 @@ public:
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
+public:
+	void LoadFileInfo();
 private:
 	bool m_isClosed;//监视是否关闭
 private:
 	//static void threadEntryForDownFile(void* arg);
 	//void threadDownFile();
 	void LoadFileCurrent();
-	void LoadFileInfo();
 	CString GetPath(HTREEITEM hTree);
 	void DeleteTreeChildrenItem(HTREEITEM hTree);
 

@@ -252,30 +252,8 @@ void CRemoteClientDlg::LoadFileInfo()
 	CString strPath = GetPath(hTreeSelected);
 
 	// 发送命令获取该路径下的文件列表
-	std::list<CPacket> lstPackets;
-	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(),2, false,(BYTE*)(LPCTSTR)strPath,strPath.GetLength(), (WPARAM)hTreeSelected);
+	CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(),2, false,(BYTE*)(LPCTSTR)strPath,strPath.GetLength(), (WPARAM)hTreeSelected);
 
-	// 遍历返回的文件信息
-	if (lstPackets.size() > 0) {
-		auto it = lstPackets.begin();
-		for (; it != lstPackets.end(); it++) {
-			PFILEINFO pInfo = (PFILEINFO)(*it).strData.c_str();
-			if (pInfo->HasNext == FALSE) continue;  // 无效数据跳过
-
-			if (pInfo->IsDirectory) {  // 如果是目录
-				// 跳过 "." 和 ".."（当前目录和上级目录）
-				if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
-					continue;
-				}
-				// 在树控件中添加目录节点
-				HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);
-				m_Tree.InsertItem("", hTemp, TVI_LAST);  // 添加空子节点（用于展开）
-			}
-			else {  // 如果是文件
-				m_List.InsertItem(0, pInfo->szFileName);  // 在列表控件中添加文件名
-			}
-		}
-	}
 }
 
 //  获取完整路径​
@@ -499,6 +477,7 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 					// 在树控件中添加目录节点
 					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam, TVI_LAST);
 					m_Tree.InsertItem("", hTemp, TVI_LAST);  // 添加空子节点（用于展开）
+					m_Tree.Expand((HTREEITEM)lParam, TVE_EXPAND);
 				}
 				else {  // 如果是文件
 					m_List.InsertItem(0, pInfo->szFileName);  // 在列表控件中添加文件名
@@ -526,6 +505,14 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 					FILE* pFile = (FILE*)lParam;
 					fwrite(head.strData.c_str(), 1, head.strData.size(), pFile);
 					index += head.strData.size();
+
+					// 判断是否读取完成
+					if (index >= length) {
+						fclose((FILE*)lParam);
+						length = 0;
+						index = 0;
+						CClientController::getInstance()->DownloadEnd();
+					}
 				}
 			}
 			break;

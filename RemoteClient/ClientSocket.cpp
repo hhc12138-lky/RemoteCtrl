@@ -213,21 +213,24 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 
 	HWND hWnd = (HWND)lParam;
 
+	size_t nTemp = data.strData.size();
+	CPacket current((BYTE*)data.strData.c_str(), nTemp);
 	if (InitSocket() == true) {
 		
 		int ret = send(m_sock, (char*)data.strData.c_str(), (int)data.strData.size(), 0);
 		if (ret > 0) {
-			size_t index = 0;
+			size_t index = 0; // index记录缓冲区数据最尾部
 			std::string strBuffer;
 			strBuffer.resize(BUFFER_SIZE);
 			char* pBuffer = (char*)strBuffer.c_str();
 
 			while (m_sock != INVALID_SOCKET) {
-				int length = recv(m_sock, pBuffer, BUFFER_SIZE - index, 0);
+				// 根据m_sock套接字接收数据，从pBuffer + index位置开始存放，最多存储BUFFER_SIZE - index个字节
+				int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);
 				if (length > 0 || index >0){
-					index += (size_t) length;
-					size_t nLen = index;
-					CPacket pack((BYTE*)pBuffer, nLen);
+					index += (size_t) length; // recv成功后 index更新到最尾部
+					size_t nLen = index; // nLen记录缓冲区最新数据的总长度
+					CPacket pack((BYTE*)pBuffer, nLen); // 将这段长度的数据尝试解析为一个CPacket结构体， 解析不成功nLen变成0， 成功返回nLen变成实际解析掉的长度（<=index）
 					if (nLen > 0) {
 						// 为了实现跨线程的消息发送，这里把pack在堆上new了个对象，包装后发送，记得要在消息处理线程中，处理完成后delete掉
 						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam); 
@@ -235,13 +238,15 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 							CloseSocket();
 							return;
 						}
+						// index变成仍未解析的缓冲区剩余数据的长度
+						index -= nLen;
+						// 将pBuffer + nLen位置向后index个字节的数据移动到pBuffer位置（即开头位置）
+						memmove(pBuffer, pBuffer + nLen, index);
 					}
-					index -= nLen;
-					memmove(pBuffer, pBuffer + index, nLen);
 				}
 				else {//TODO:对方关闭了套接字 或者 网络设备异常
 					CloseSocket();
-					::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, 1);
+					::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(current.sCmd, NULL, 0), 1); // 最后一个包应答一个空
 
 				}
 			}
