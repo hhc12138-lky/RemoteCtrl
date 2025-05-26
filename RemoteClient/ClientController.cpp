@@ -48,21 +48,6 @@ int CClientController::Invoke(CWnd*& pMainWnd)
 	return m_remoteDlg.DoModal();
 }
 
-// 线程间消息发送​
-LRESULT CClientController::SendMessage(MSG msg)
-{
-	// 创建事件，通过事件对象实现跨线程同步通信
-	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-	if (hEvent == NULL) {
-		return -2;
-	}
-	// 同时把消息转为自定义结构体，使用PostThreadMessage将事件机器消息存入线程消息队列，并且注册为WM_SEND_MESSAGE
-	MSGINFO info(msg);
-	::PostThreadMessage(m_hThreadID, WM_SEND_MESSAGE, (WPARAM)&info, (LPARAM)hEvent);//这里的m_hThreadID已经在InitController的_beginthreadex中初始化过了，有固定的线程id值
-	::WaitForSingleObject(hEvent, INFINITE); // 等待事件对象被释放
-	CloseHandle(hEvent);
-	return info.result;
-}
 
 // 命令发送​
 bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
@@ -119,7 +104,6 @@ void CClientController::threadWatchScreenEntry(void* arg)
 void CClientController::StartWatchScreen()
 {
 	m_isClosed = false; // 将监控标志位设为false，表示监控开始
-	//m_watchDlg.SetParent(&m_remoteDlg);
 	m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchScreenEntry, 0, this);
 	m_watchDlg.DoModal();// 以模态方式显示监控窗口，阻塞当前线程直到对话框关闭
 	m_isClosed = true;// 设置关闭标志通知监控线程退出
@@ -131,61 +115,6 @@ void CClientController::DownloadEnd()
 	m_statusDlg.ShowWindow(SW_HIDE);
 	m_remoteDlg.EndWaitCursor();
 	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
-}
-
-/*文件下载线程********************************************************************************************************/
-void CClientController::threadDownloadFile()
-{
-	// 打开本地文件并处理失败情况
-	FILE* pFile = fopen(m_strLocal, "wb+");
-	if (pFile == NULL) {
-		AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！！"));
-		m_statusDlg.ShowWindow(SW_HIDE);
-		m_remoteDlg.EndWaitCursor();
-		return;
-	}
-
-	// 文件下载
-	CClientSocket* pClient = CClientSocket::getInstance();
-	do {
-		// 发送下载命令
-		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);
-		// 获取文件总长度(服务器返回的第一个数据包中包含文件大小)
-		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();
-		if (nLength == 0) {
-			AfxMessageBox("文件长度为零或者无法读取文件！！！");
-			break;
-		}
-		//文件数据循环接收
-		long long nCount = 0;// 已接收字节计数器
-		while (nCount < nLength) {
-			// 处理服务器命令(接收数据)
-			ret = pClient->DealCommand();
-			if (ret < 0) {
-				AfxMessageBox("传输失败！！");
-				TRACE("传输失败：ret = %d\r\n", ret);
-				break;
-			}
-			// 写入接收到的数据到文件
-			fwrite(pClient->GetPacket().strData.c_str(), 1, pClient->GetPacket().strData.size(), pFile);
-			nCount += pClient->GetPacket().strData.size();
-		}
-	} while (false);
-	// 清理资源
-	fclose(pFile);
-	pClient->CloseSocket();
-	// 更新UI状态
-	m_statusDlg.ShowWindow(SW_HIDE);
-	m_remoteDlg.EndWaitCursor();
-	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
-	m_remoteDlg.LoadFileInfo();
-}
-
-void CClientController::threadDownloadEntry(void* arg)
-{
-	CClientController* thiz = (CClientController*)arg;
-	thiz->threadDownloadFile();
-	_endthread();
 }
 
 int CClientController::DownFile(CString strPath)
@@ -222,7 +151,7 @@ int CClientController::DownFile(CString strPath)
 	return 0;
 }
 
-/*消息处理线程********************************************************************************************************/
+
 void CClientController::threadFunc()
 {
 	MSG msg;

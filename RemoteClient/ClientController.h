@@ -23,8 +23,7 @@ public:
 	int InitController();
 	// 启动主界面
 	int Invoke(CWnd*& pMainWnd);
-	// 发送消息
-	LRESULT SendMessage(MSG msg);
+
 
 	// 更新服务器地址
 	void UpdataAddress(int nIP, int nPort) {
@@ -73,11 +72,6 @@ protected:
 	// 监控线程入口
 	static void threadWatchScreenEntry(void* arg);
 
-	// 下载线程 远程文件下载功能，使用单独线程处理
-	void threadDownloadFile();
-	// 下载线程入口
-	static void threadDownloadEntry(void* arg);
-
 	/* Windows API 线程机制的设计
 	1. 线程入口函数的强制约定
 		Windows API (_beginthreadex/CreateThread) 要求线程入口函数必须满足特定的函数签名：
@@ -101,7 +95,6 @@ protected:
 	CClientController():m_statusDlg(&m_remoteDlg),m_watchDlg(&m_remoteDlg) {
 		m_isClosed = true;
 		m_hThreadWatch = INVALID_HANDLE_VALUE;
-		m_hThreadDownload = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE;
 		m_hThreadID = -1;
 	}
@@ -167,7 +160,6 @@ private:
 	CStatusDlg m_statusDlg;// 状态对话框
 
 	HANDLE m_hThread;// 消息线程句柄
-	HANDLE m_hThreadDownload;// 下载线程句柄
 	HANDLE m_hThreadWatch;// 监控线程句柄
 	CString m_strRemote;//下载文件的远程路径
 	CString m_strLocal;//下载文件的本地路径
