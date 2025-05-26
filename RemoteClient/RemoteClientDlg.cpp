@@ -218,10 +218,16 @@ void CRemoteClientDlg::InitUIData()
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 	// 初始化默认IP和端口
 	UpdateData();
-	//m_server_address = 0x0A00020F; // 10.0.2.15（需根据实际修改）
-	m_server_address = 0x7F000001; // 127.0.0.1（需根据实际修改）
 
-	m_nPort = _T("9527");
+	// 1.本地测试用
+	//m_server_address = 0x0A00020F; // 10.0.2.15（需根据实际修改）
+	//m_server_address = 0x7F000001; // 127.0.0.1（本地测试用）
+	//m_nPort = _T("9527");
+
+	//2.虚拟机测试用 注意我的虚拟机使用NAT+端口转发实现内部网络访问 目前本机的127.0.0.1:11528 映射到虚拟机网络的127.0.0.1:9527
+	m_server_address = 0x7F000001; // 127.0.0.1（本地测试用）
+	m_nPort = _T("11528");
+
 	CClientController* pController = CClientController::getInstance();
 	pController->UpdataAddress(m_server_address, atoi((LPCTSTR)m_nPort));
 	UpdateData(FALSE);
@@ -248,7 +254,7 @@ void CRemoteClientDlg::LoadFileCurrent()
 		if (!pInfo->IsDirectory) {
 			m_List.InsertItem(0, pInfo->szFileName);  // 非目录则插入列表
 		}
-		int cmd = CClientController::getInstance()->DealCommand();  // 处理下一个文件
+		int cmd = CClientController::getInstance()->DealCommand(); 
 		if (cmd < 0) break;
 		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 	}

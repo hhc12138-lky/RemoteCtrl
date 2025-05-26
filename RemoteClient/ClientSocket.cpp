@@ -54,7 +54,7 @@ CClientSocket::CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SO
 		exit(0);
 	}
 
-	// 创建专用于数据包处理于响应的线程 使用m_eventInvoke事件机制监控是否启动
+	// **创建专用于数据包处理于响应的线程 使用m_eventInvoke事件机制监控是否启动**
 	m_eventInvoke = CreateEvent(NULL, FALSE, FALSE, NULL);// 属性为null，自动重置为true，初始值为false，名称为null
 	m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);
 	if (WaitForSingleObject(m_eventInvoke, 100) == WAIT_TIMEOUT) {
@@ -74,6 +74,8 @@ CClientSocket::CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SO
 		m_mapFunc[func.message] = func.func;
 	}
 }
+
+
 bool CClientSocket::InitSocket()
 {
 	/*初始化并连接Socket​*/
@@ -86,11 +88,15 @@ bool CClientSocket::InitSocket()
 	//​​设置服务器地址
 	sockaddr_in serv_adr;
 	memset(&serv_adr, 0, sizeof(serv_adr));
-	serv_adr.sin_family = AF_INET; // 指定地址族为 IPv4（AF_INET）
-
-	TRACE("addr %08X nIP %08X\r\n", inet_addr("127.0.0.1"), m_nIP);
+	// 指定地址族为 IPv4（AF_INET）
+	serv_adr.sin_family = AF_INET; 
+	//设置IP地址和端口
 	serv_adr.sin_addr.s_addr = htonl(m_nIP);
 	serv_adr.sin_port = htons(m_nPort);
+	// 打印可读的 IP 和端口（而不是原始字节序）
+	TRACE("Server IP: %s, Port: %d\r\n",
+		inet_ntoa(serv_adr.sin_addr),  // 自动转换网络序 → 点分十进制（如 "10.0.2.15"）
+		ntohs(serv_adr.sin_port));     // 转换回主机序（9527）
 
 	if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
 		AfxMessageBox("指定的IP地址，不存在！");
@@ -98,13 +104,13 @@ bool CClientSocket::InitSocket()
 	}
 
 	//建立连接
-int ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr));
-if (ret == -1) {
-	AfxMessageBox("连接失败!");
-	TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
-	return false;
-}
-return true;
+	int ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr));
+	if (ret == -1) {
+		AfxMessageBox("连接失败!");
+		TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
+		return false;
+	}
+	return true;
 }
 
 int CClientSocket::DealCommand()
@@ -207,7 +213,7 @@ bool CClientSocket::Send(const CPacket& pack)
 }
 
 void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
-{// TODO:定义一个消息的数据结构（数据和数据长度，模式）+回调消息的数据结构（HWND MESSAGE）
+{
 	PACKET_DATA data = *(PACKET_DATA*)wParam;
 	delete (PACKET_DATA*)wParam;
 
@@ -359,7 +365,7 @@ void CClientSocket::threadFunc2()
 			/* m_mapFunc会包含的函数有：
 			{WM_SEND_PACK,&CClientSocket::SendPack}
 			*/
-			(this->*m_mapFunc[msg.message])(msg.message, msg.wParam, msg.lParam);
+			(this->*m_mapFunc[msg.message])(msg.message, msg.wParam, msg.lParam); // 目前这里只可能调用&CClientSocket::SendPack
 		}
 	}
 }

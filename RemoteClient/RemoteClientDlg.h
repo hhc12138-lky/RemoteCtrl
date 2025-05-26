@@ -27,11 +27,11 @@ public:
 	void LoadFileInfo();
 private:
 	bool m_isClosed;//监视是否关闭
-private:
+private:// TODO：代码即文档
 	void DealCommand(WORD nCmd, const std::string& strData, LPARAM lParam);
 	void InitUIData();
 	void LoadFileCurrent();
-	void Str2Tree(const std::string& driver, CTreeCtrl& tree);
+	void Str2Tree(const std::string& drivers, CTreeCtrl& tree);
 	void UpdataFileInfo(const FILEINFO& finfo, HTREEITEM hParent);
 	void UpdataDownloadFile(const std::string& strData, FILE* pFile);
 	CString GetPath(HTREEITEM hTree);
