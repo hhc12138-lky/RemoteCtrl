@@ -25,6 +25,14 @@ using namespace std;
 void ChooseAutoInvoke() {
 	// 本机测试后记得删除相关内容
 
+	//CString strPath = CString(_T("%SystemRoot\\system32\\RemoteCtrl.exe"));
+	// ！！！注意system(strCmd.c_str());执行后有个bug，给软链接设置到%SystemRoot\\SysWOW64下面了，暂时不知道为什么
+	TCHAR wcsSystem[MAX_PATH] = _T(" ");
+	CString strPath = CString(_T("C:\\Windows\\SysWOW64\\RemoteCtrl.exe"));
+	if (PathFileExists(strPath)) {
+		return;
+	}
+
 	CString strSubKey = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"); // 注册表路径，自己到目标电脑上找
 	CString strInfo = _T("该程序只允许用于合法的用途!\n");
 	strInfo += _T("继续运行该程序，将使得这台机器处于被监控状态!\n");
@@ -53,22 +61,19 @@ void ChooseAutoInvoke() {
 		if (ret != ERROR_SUCCESS) {
 			RegCloseKey(hKey);
 			MessageBox(NULL, _T("设置自动开机启动失败！是否权限不足？\r\n程序启动失败！"), _T("错误"), MB_ICONERROR | MB_TOPMOST);
-			exit(0);
+			::exit(0);
 		}
 		// 打开子键strSubKey成功 则设置注册表项
-		//CString strPath = CString(_T("%SystemRoot\\system32\\RemoteCtrl.exe"));
-		CString strPath = CString(_T("%SystemRoot\\SysWOW64\\RemoteCtrl.exe")); // ！！！注意system(strCmd.c_str());执行后有个bug，给软链接设置到%SystemRoot\\SysWOW64下面了，暂时不知道为什么
-
 		ret = RegSetValueEx(hKey, _T("RemoteCtrl"), 0, REG_EXPAND_SZ, (BYTE*)(LPCTSTR)strPath, strPath.GetLength() * sizeof(TCHAR));
 		if (ret != ERROR_SUCCESS) {
 			RegCloseKey(hKey);
 			MessageBox(NULL, _T("设置自动开机启动失败！是否权限不足？\r\n程序启动失败！"), _T("错误"), MB_ICONERROR | MB_TOPMOST);
-			exit(0);
+			::exit(0);
 		}
 		RegCloseKey(hKey);
 	}
 	else if (ret == IDCANCEL) {
-		exit(0);
+		::exit(0);
 	}
 }
 
@@ -96,11 +101,11 @@ int main()
 			switch (ret) {
 			case -1:
 				MessageBox(NULL, _T("网络初始化异常，未能成功初始hi，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
-				exit(0);
+				::exit(0);
 				break;
 			case -2:
 				MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-				exit(0);
+				::exit(0);
 				break;
 
 			}
