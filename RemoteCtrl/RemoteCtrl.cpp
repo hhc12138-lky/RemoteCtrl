@@ -118,6 +118,8 @@ void ShowError()
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(LPWSTR)&lpMessageBuf, 0, NULL);
 	OutputDebugString(lpMessageBuf);
+	MessageBox(NULL, lpMessageBuf, _T("发生错误"), MB_OK);
+
 	LocalFree(lpMessageBuf);
 }
 
@@ -150,17 +152,83 @@ bool IsAdmin()
 	return false;
 }
 
+void RunAsAdmin()
+{
+	//获取管理员权限、使用该权限创建进程
+
+	// 注意：这里需要在被控制端的windows10的“本地安全策略”（家庭版是没有的）中，安全设置-本地策略-安全选取中，设置“账户：管理员账户状态”为启动，设置“使用空密码的本地账户只允许进行控制台登录”为禁用 才行。
+	HANDLE hToken = NULL;
+
+	BOOL ret = LogonUser(
+		L"Administrator",      // 管理员账户名（硬编码）
+		NULL,                  // 域名（NULL表示本地计算机）
+		NULL,                  // 密码（NULL可能依赖环境配置）
+		LOGON32_LOGON_INTERACTIVE,  // 交互式登录方式
+		LOGON32_PROVIDER_DEFAULT,   // 默认身份验证提供程序
+		&hToken               // 输出令牌句柄
+	);
+
+	if (!ret) {
+		ShowError();          // 登录失败时显示错误信息
+		MessageBox(NULL, _T("登录错误！"), _T("程序错误"), MB_OK);
+		::exit(0);            // 立即退出程序
+	}
+	OutputDebugString(L"Logon administrator success!\r\n");  
+
+	/*为什么RunAsAdmin需要在获得管理员权限后开一个新的进程
+		1.Windows权限是进程级的  
+
+		2.通过 LogonUser 获取的管理员令牌（hToken）只能用于创建新进程，无法直接提升当前进程权限。  
+		绕过UAC限制  
+
+		3.直接动态提权会被UAC拦截，而 CreateProcessWithTokenW 能以管理员身份启动新进程，无需用户确认（需配置正确）。  
+		安全隔离  
+
+		4.避免当前进程（普通权限）和特权代码混合，降低风险。  
+
+		一句话总结：Windows要求通过新进程承载管理员权限，无法原地升级。
+	*/
+	
+	STARTUPINFO si = { 0 };  // 定义启动信息结构体，初始化为0
+	PROCESS_INFORMATION pi = { 0 };  // 定义进程信息结构体，初始化为0
+	TCHAR sPath[MAX_PATH] = _T("");  // 定义字符数组，用于存储当前目录路径，初始化为空字符串
+	GetCurrentDirectory(MAX_PATH, sPath);  // 获取当前目录路径，并存储到sPath中
+	CString strCmd = sPath;  // 定义CString对象，用于存储命令字符串，初始化为当前目录路径
+	strCmd += _T("\\RemoteCtrl.exe");  // 将命令字符串追加为当前目录路径下的RemoteCtrl.exe
+	//ret = CreateProcessWithTokenW(hToken, LOGON_WITH_PROFILE, NULL, (LPWSTR)(LPCWSTR)strCmd, CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi); 
+	ret = CreateProcessWithLogonW(
+		_T("Administrator"),  // 指定管理员账户
+		NULL,                 // 域名（NULL表示本地计算机）
+		NULL,                 // 密码（NULL可能依赖环境配置）
+		LOGON_WITH_PROFILE,   // 加载用户配置文件
+		NULL,                 // 应用程序名（使用命令行参数）
+		(LPWSTR)(LPCWSTR)strCmd,  // 命令行（转换为宽字符指针）
+		CREATE_UNICODE_ENVIRONMENT,  // 使用Unicode环境
+		NULL,                 // 环境块（NULL表示继承父进程）
+		NULL,                 // 当前目录（NULL表示继承父进程）
+		&si,                   // 接收启动信息
+		&pi                   // 接收进程信息
+	);
+
+	CloseHandle(hToken);  // 关闭令牌句柄
+	if (!ret) {  // 如果创建进程失败，则执行以下操作
+		ShowError();  // 显示错误信息
+		MessageBox(NULL, _T("创建进程失败"), _T("程序错误"), 0);  // 弹出消息框，显示创建进程失败的信息
+		::exit(0);  // 退出程序
+	}
+	WaitForSingleObject(pi.hProcess, INFINITE);  // 等待新创建的进程结束
+	CloseHandle(pi.hProcess);  // 关闭进程句柄
+	CloseHandle(pi.hThread);  // 关闭线程句柄
+	
+}
+
+
+
 // 使用回调函数 将函数作为参数传递 实现解耦合
 int main()
 {
-	if (IsAdmin) {
-		OutputDebugString(L"current is run as administrator!\r\n");
-	}
-	else {
-		OutputDebugString(L"current is run as normal user!\r\n");
-	}
-	int nRetCode = 0;  
-	 
+	int nRetCode = 0;
+
 	HMODULE hModule = ::GetModuleHandle(nullptr);
 
 	if (hModule != nullptr)
@@ -174,6 +242,18 @@ int main()
 		}
 		else
 		{
+			if (IsAdmin) {
+				OutputDebugString(L"current is run as administrator!\r\n");
+				MessageBox(NULL, _T("管理员"), _T("当前用户状态"), MB_OK);
+			}
+			else {
+				OutputDebugString(L"current is run as normal user!\r\n");
+				// 获取管理员权限、使用该权限创建进程
+				RunAsAdmin();
+				MessageBox(NULL, _T("普通用户->管理员"), _T("当前用户状态"), MB_OK);
+				return nRetCode;
+
+			}
 			CCommand cmd;
 			ChooseAutoInvoke();
 			int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);
