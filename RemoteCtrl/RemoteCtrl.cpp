@@ -45,7 +45,7 @@ void WriteRegisterTable(const CString& strPath) {
 
 	//从根键HKEY_LOCAL_MACHINE打开子键strSubKey
 	HKEY hKey = NULL;
-	int ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, strSubKey, 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &hKey);
+	ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, strSubKey, 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &hKey);
 	// 打开子键strSubKey失败
 	if (ret != ERROR_SUCCESS) {
 		RegCloseKey(hKey);
@@ -65,7 +65,7 @@ void WriteRegisterTable(const CString& strPath) {
 
 void WriteStartupDir(const CString& strPath) {
 	CString strCmd = GetCommandLine();
-	strCmd.Replace(_T("\""), _T(""));
+	strCmd.Replace(_T("\""), _T("")); //GetCommandLine返回的字符串自带引号
 	BOOL ret = CopyFile(strCmd, strPath, FALSE);
 	//fopen CFile system(copy) CopyFile OpenFile
 	if (ret == FALSE) {
@@ -107,9 +107,58 @@ void ChooseAutoInvoke() {
 	}
 }
 
+
+void ShowError()
+{
+	LPWSTR lpMessageBuf = NULL; 
+	//strerror(errno);//标准C语言库
+	FormatMessage(
+		FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
+		NULL, GetLastError(),
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPWSTR)&lpMessageBuf, 0, NULL);
+	OutputDebugString(lpMessageBuf);
+	LocalFree(lpMessageBuf);
+}
+
+bool IsAdmin()
+{
+	HANDLE hToken = NULL;
+
+	// 获取当前进程的令牌句柄
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken))
+	{
+		ShowError();
+		return false;
+	}
+	TOKEN_ELEVATION eve;
+	DWORD len = 0;
+	// 根据当前进程的令牌句柄查询提升信息。TokenElevation专用于检测 ​​UAC（用户账户控制）提升状态​​，判断进程是否以管理员权限运行
+	if (GetTokenInformation(hToken, TokenElevation, &eve, sizeof(eve), &len) == FALSE)
+	{
+		ShowError();
+		return false;
+	}
+	CloseHandle(hToken);  // 关闭令牌句柄
+
+	// 根据返回数据长度判断管理员权限
+	if (len == sizeof(eve))
+	{
+		return eve.TokenIsElevated;
+	}
+	printf("length of tokeninformation is %d\r\n", len);
+	return false;
+}
+
 // 使用回调函数 将函数作为参数传递 实现解耦合
 int main()
 {
+	if (IsAdmin) {
+		OutputDebugString(L"current is run as administrator!\r\n");
+	}
+	else {
+		OutputDebugString(L"current is run as normal user!\r\n");
+	}
 	int nRetCode = 0;  
 	 
 	HMODULE hModule = ::GetModuleHandle(nullptr);
