@@ -7,6 +7,7 @@
 #include "ServerSocket.h"
 #include "EdoyunTool.h"
 #include "Command.h"
+#include <conio.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -26,6 +27,7 @@ CWinApp theApp;
 using namespace std;
 
 
+// 开机自启
 bool ChooseAutoInvoke(const CString& strPath) {
 	// 本机测试后记得删除相关内容
 	// ！！！注意system(strCmd.c_str());执行后有个bug，给软链接设置到%SystemRoot\\SysWOW64下面了，暂时不知道为什么
@@ -56,9 +58,156 @@ bool ChooseAutoInvoke(const CString& strPath) {
 }
 
 
-// 使用回调函数 将函数作为参数传递 实现解耦合
+/* 操作类型宏定义 */
+#define IOCP_LIST_EMPTY 0    // 空操作
+#define IOCP_LIST_PUSH  1    // 压入操作
+#define IOCP_LIST_POP   2    // 弹出操作
+
+/* 操作类型枚举 */
+enum {
+	IocpListEmpty,  // 对应 IOCP_LIST_EMPTY
+	IocpListPush,   // 对应 IOCP_LIST_PUSH
+	IocpListPop     // 对应 IOCP_LIST_POP
+};
+
+/* IOCP参数结构体，用于线程间通信*/
+typedef struct IocpParam {
+	int nOperator;         // 操作类型（使用宏或枚举值）
+	std::string strData;   // 传输的数据内容
+	_beginthread_proc_type cbFunc;// 回调
+
+	// 带参构造函数
+	IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
+		nOperator = op;
+		strData = sData;
+		cbFunc = cb;
+	}
+
+	// 无参构造函数
+	IocpParam() {
+		nOperator = -1;    // 默认无效操作标识
+	}
+} IOCP_PARAM;  // 类型别名
+
+
+void threadmain(HANDLE hIOCP) {
+	std::list<std::string> lstString; // 共享数据队列
+
+	DWORD dwTransferred = 0;	// 接收I/O操作实际传输的字节数
+	ULONG_PTR CompletionKey = 0; // 关联到IOCP的自定义参数，此处传递IOCP_PARAM结构体指针，类似于LPARAMA。
+	OVERLAPPED* pOverlapped = NULL; //重叠I/O结构指针
+	int count = 0, count0 = 0;
+	// 阻塞等待指定的IOCP队列中的完成事件，直到有事件到达或线程被唤醒
+	while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE))
+	{
+		// dwTransferred == 0：通常表示线程退出信号（由PostQueuedCompletionStatus发送空包触发）
+		if ((dwTransferred == 0) || (CompletionKey == NULL))
+		{
+			printf("thread is prepare to exit!\r\n");
+			break;
+		}
+
+		// 将CompletionKey强制转换为IOCP_PARAM*，获取操作类型和数据。CompletionKey对应PostQueuedCompletionStatus的第三个参数
+		/*这里可以强制转换是因为：ULONG_PTR是与指针等宽的无符号整数类型，所以可以将任何指针类型（如IOCP_PARAM*）存储到ULONG_PTR*/
+		IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;
+		// 压入操作
+		if (pParam->nOperator == IocpListPush) {
+			lstString.push_back(pParam->strData);
+			count0++;
+		}
+		// 弹出操作
+		else if (pParam->nOperator == IocpListPop) {
+			std::string* pStr = NULL;
+			if (lstString.size() > 0) {
+				pStr = new std::string(lstString.front());
+				lstString.pop_front();
+			}
+			// 若指定了回调函数cbFunc，则异步处理数据
+			if (pParam->cbFunc) {
+				pParam->cbFunc(pStr);
+			}
+			count++;
+		}
+		// 清空操作
+		else if (pParam->nOperator == IocpListEmpty) {
+			lstString.clear();
+		}
+		delete pParam;
+	}
+	printf("thread exit push:%d,pop:%d\r\n", count, count0);
+}
+
+// 工作线程函数
+void threadQueueEntry(HANDLE hIOCP)
+{
+	threadmain(hIOCP);
+	_endthread(); // 代码到此为止，会导致本地对象无法调用析构函数，从而导致内存泄漏
+}
+
+
+void func(void* arg)
+{
+	/*处理从队列中弹出的数据的示例回调函数*/
+
+	// 将void*参数转型为string指针
+	std::string* pstr = (std::string*)arg;
+	if (pstr != NULL) {
+		// 输出从列表中弹出的字符串内容
+		printf("pop from list:%s\r\n", pstr->c_str());
+		// 释放动态内存
+		delete pstr;
+	}
+	else {
+		printf("list is empty, no data!\r\n");
+	}
+} 
+
 int main()
 {
+	if (!CEdoyunTool::Init) return 1;
+
+	printf("press any key to exit ...\r\n");
+
+	// 创建IOCP（Input/Output Completion Port）句柄
+	HANDLE hIOCP = INVALID_HANDLE_VALUE; 
+	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);
+
+	if (hIOCP == INVALID_HANDLE_VALUE || hIOCP == NULL) {
+		printf("create iocp failed!%d\r\n", GetLastError());
+	}
+	// 创建工作线程，传入IOCP句柄作为参数
+	HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);
+
+	ULONGLONG tick = GetTickCount64();
+	ULONGLONG tick0 = GetTickCount64();
+	int count = 0, count0 = 0;
+	// 定时投递任务用以测试
+	while (_kbhit() == 0) {
+		if (GetTickCount64() - tick0 > 1300) {
+			// 1300ms超时后推送第一条消息
+			PostQueuedCompletionStatus(hIOCP,sizeof(IOCP_PARAM),(ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world",func),NULL);
+			tick0 = GetTickCount64();
+			count++;
+		}
+		if (GetTickCount64() - tick > 2000) {
+			// 2000ms超时后推送第二条消息并重置计时器
+			PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL);
+			tick = GetTickCount64();
+			count0++;
+		}
+		Sleep(1);
+	}
+
+	// 资源清理​
+	if (hIOCP != NULL) {
+		PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL); // 发送退出信号
+		WaitForSingleObject(hThread, INFINITE); // 等待线程结束
+	}
+
+	CloseHandle(hIOCP); // 关闭IOCP句柄
+	printf("exit done! count=%d count0=%d\r\n",count,count0);
+	::exit(0);
+	/*
 	if (CEdoyunTool::IsAdmin) {
 		if (!CEdoyunTool::Init) return 1;
 		if (!ChooseAutoInvoke(INVOKE_PATH)) {
@@ -82,6 +231,7 @@ int main()
 		}
 	}
 	return 0;
+	*/
 }
 
 
