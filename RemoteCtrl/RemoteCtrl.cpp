@@ -7,7 +7,10 @@
 #include "ServerSocket.h"
 #include "EdoyunTool.h"
 #include "Command.h"
+#include "EdoyunQueue.h"
 #include <conio.h>
+
+
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -168,44 +171,27 @@ int main()
 
 	printf("press any key to exit ...\r\n");
 
-	// 创建IOCP（Input/Output Completion Port）句柄
-	HANDLE hIOCP = INVALID_HANDLE_VALUE; 
-	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);
-
-	if (hIOCP == INVALID_HANDLE_VALUE || hIOCP == NULL) {
-		printf("create iocp failed!%d\r\n", GetLastError());
-	}
-	// 创建工作线程，传入IOCP句柄作为参数
-	HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);
-
-	ULONGLONG tick = GetTickCount64();
-	ULONGLONG tick0 = GetTickCount64();
-	int count = 0, count0 = 0;
-	// 定时投递任务用以测试
+	CEdoyunQueue<std::string> lstStrings;
+	ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64();
 	while (_kbhit() == 0) {
 		if (GetTickCount64() - tick0 > 1300) {
 			// 1300ms超时后推送第一条消息
-			PostQueuedCompletionStatus(hIOCP,sizeof(IOCP_PARAM),(ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world",func),NULL);
+			lstStrings.PushBack("hello world");
 			tick0 = GetTickCount64();
-			count++;
 		}
 		if (GetTickCount64() - tick > 2000) {
 			// 2000ms超时后推送第二条消息并重置计时器
-			PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL);
+			std::string str;
+			lstStrings.PopFront(str);
 			tick = GetTickCount64();
-			count0++;
+			printf("pop from queue:%s\r\n", str.c_str());
 		}
 		Sleep(1);
 	}
 
-	// 资源清理​
-	if (hIOCP != NULL) {
-		PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL); // 发送退出信号
-		WaitForSingleObject(hThread, INFINITE); // 等待线程结束
-	}
-
-	CloseHandle(hIOCP); // 关闭IOCP句柄
-	printf("exit done! count=%d count0=%d\r\n",count,count0);
+	printf("exit done!size %d\r\n", (int)lstStrings.Size());
+	lstStrings.Clear();
+	printf("exit done!size %d\r\n", (int)lstStrings.Size());
 	::exit(0);
 	/*
 	if (CEdoyunTool::IsAdmin) {

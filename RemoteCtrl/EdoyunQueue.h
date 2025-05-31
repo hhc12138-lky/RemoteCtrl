@@ -22,7 +22,7 @@ public:
         HANDLE hEvent;                // 用于EQPop操作的同步事件句柄
 
         // 带参构造函数（投递任务时使用）
-        IocpParam(int op, const T& data,HANDLE hEve = NULL) {
+        IocpParam(int op, const T& data, HANDLE hEve = NULL) {
             nOperator = op;
             Data = data;
             hEvent = hEve;
@@ -34,17 +34,17 @@ public:
         }
     } PPARAM;  // 类型别名：Post Parameter（投递参数）
 
-// 线程安全的队列（利用IOCP实现）
+    // 线程安全的队列（利用IOCP实现）
 public:
     CEdoyunQueue() {
         m_lock = false;
-        m_hCompeletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL,1);
+        m_hCompletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);
         m_hThread = INVALID_HANDLE_VALUE;
-        if (m_hCompeletionPort != NULL) {
+        if (m_hCompletionPort != NULL) {
 
             m_hThread = (HANDLE)_beginthread(
                 &CEdoyunQueue<T>::threadEntry,
-                0, m_hCompeletionPort
+                0, m_hCompletionPort
             );
 
         }
@@ -52,8 +52,8 @@ public:
     ~CEdoyunQueue() {
         if (m_lock) return;
         m_lock = true;
-        HANDLE hTemp = m_hCompletionPort
-        PostQueuedCompletionStatus(m_hCompeletionPort, 0, NULL, NULL);
+        HANDLE hTemp = m_hCompletionPort;
+            PostQueuedCompletionStatus(m_hCompletionPort, 0, NULL, NULL);
         WaitForSingleObject(m_hThread, INFINITE);
         m_hCompletionPort = NULL;
         CloseHandle(hTemp);
@@ -61,9 +61,12 @@ public:
 
     // 核心接口
     bool PushBack(const T& data) {
-        if (m_lock) return false;
         IocpParam* pParam = new IocpParam(EQPush, data);
-        bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM),(ULONG_PTR)pParam, NULL);
+        if (m_lock) {
+            delete pParam;
+            return false;
+        }
+        bool ret = PostQueuedCompletionStatus(m_hCompletionPort, sizeof(PPARAM), (ULONG_PTR)pParam, NULL);
         if (ret == false) delete pParam;
         return ret;
     }
@@ -75,7 +78,7 @@ public:
             if (hEvent) CloseHandle(hEvent);
             return -1;
         }
-        bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM),(ULONG_PTR)&Param, NULL);
+        bool ret = PostQueuedCompletionStatus(m_hCompletionPort, sizeof(PPARAM), (ULONG_PTR)&Param, NULL);
         if (ret == false) {
             CloseHandle(hEvent);
             return false;
@@ -93,7 +96,7 @@ public:
             if (hEvent)CloseHandle(hEvent);
             return -1;
         }
-        bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM),
+        bool ret = PostQueuedCompletionStatus(m_hCompletionPort, sizeof(PPARAM),
             (ULONG_PTR)&Param, NULL);
         if (ret == false) {
             CloseHandle(hEvent);
@@ -101,14 +104,14 @@ public:
         }
         ret = WaitForSingleObject(hEvent, INFINITE) == WAIT_OBJECT_0;
         if (ret) {
-            rReturn Param.nOperator;
+            return Param.nOperator;
         }
         return -1;
     }
-    void Clear() {
+    bool Clear() {
         if (m_lock)return false;
         IocpParam* pParam = new IocpParam(EQClear, T());
-        bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM),
+        bool ret = PostQueuedCompletionStatus(m_hCompletionPort, sizeof(PPARAM),
             (ULONG_PTR)pParam, NULL);
         if (ret == false)delete pParam;
         return ret;
@@ -122,6 +125,36 @@ private:
         _endthread();
 
     }
+
+    DealParam(PPARAM* pParam) {
+        switch (pParam->nOperator)
+        {
+        case EQPush:
+            m_lstData.push_back(pParam->Data);
+            delete pParam;
+            break;
+        case EQPop:
+            if (m_lstData.size() > 0) {
+                pParam->Data = m_lstData.front();
+                m_lstData.pop_front();
+            }
+            if (pParam->hEvent != NULL)SetEvent(pParam->hEvent);
+            break;
+        case EQSize:
+            pParam->nOperator = m_lstData.size();
+            if (pParam->hEvent != NULL)
+                SetEvent(pParam->hEvent);
+            break;
+        case EQClear:
+            m_lstData.clear();
+            delete pParam;
+            break;
+        default:
+            OutputDebugString(_T("unknown operator!\r\n"));
+            break;
+        }
+    }
+
     // 实际线程逻辑
     void threadMain() {
         DWORD dwTransferred = 0;	// 接收I/O操作实际传输的字节数
@@ -129,59 +162,44 @@ private:
         ULONG_PTR CompletionKey = 0;         // IOCP完成键（通常传递对象指针或会话标识）
         OVERLAPPED* pOverlapped = NULL;      // 重叠I/O操作结构指针（用于异步I/O）
         while (GetQueuedCompletionStatus(
-            m_hCompeletionPort, 
-            &dwTransferred, 
-            &CompletionKey, 
-            &pOverlapped, 
+            m_hCompletionPort,
+            &dwTransferred,
+            &CompletionKey,
+            &pOverlapped,
             INFINITE))
         {
-            // dwTransferred == 0：通常表示线程退出信号（由PostQueuedCompletionStatus发送空包触发）
             if ((dwTransferred == 0) || (CompletionKey == NULL))
             {
                 printf("thread is prepare to exit!\r\n");
                 break;
             }
 
-            // 将CompletionKey强制转换为IOCP_PARAM*，获取操作类型和数据。CompletionKey对应PostQueuedCompletionStatus的第三个参数
             pParam = (PPARAM*)CompletionKey;
-            switch (pParam->nOperator)
-            {
-            case EQPush:
-                m_lstData.push_back(pParam->strData);
-                delete pParam;
-                break;
-            case EQPop:
-                if (m_lstData.size() > 0) {
-                    pParam->Data = m_lstData.front();
-                    m_lstData.pop_front();
-                }
-                if (pParam->hEvent != NULL)SetEvent(pParam->hEvent);
-                break;
-            case EQSize:
-                pParam->nOperator = m_lstData.size();
-                if (pParam->hEvent != NULL)
-                    SetEvent(pParam->hEvent);
-                break;
-            case EQClear:
-                m_lstData.clear();
-                delete pParam;
-                break;
-            default:
-                OutputDebugString("unknown operator!\r\n");
-                break;
-            }
+            DealParam(pParam);
         }
-        CloseHandle(m_hCompeletionPort);
+        while (GetQueuedCompletionStatus(
+            m_hCompletionPort,
+            &dwTransferred,
+            &CompletionKey,
+            &pOverlapped,
+            0)) {
+            if ((dwTransferred == 0) || (CompletionKey == NULL))
+            {
+                printf("thread is prepare to exit!\r\n");
+                continue;
+            }
+            pParam = (PPARAM*)CompletionKey;
+            DealParam(pParam);
+        }
+
+        CloseHandle(m_hCompletionPort);
     }
 
 private:
     std::list<T> m_lstData;        // 底层数据存储（双向链表）
-    HANDLE m_hCompletionPort;      // IOCP完成端口句柄（注意原图拼写错误：m_hCompeletionPort）
+    HANDLE m_hCompletionPort;      // IOCP完成端口句柄（注意原图拼写错误：m_hCompletionPort）
     HANDLE m_hThread;              // 工作线程句柄
     std::atomic<bool> m_lock;//队列正在析构
-
-
-
 };
 
 
