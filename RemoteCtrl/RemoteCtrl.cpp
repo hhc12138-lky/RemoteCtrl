@@ -189,7 +189,7 @@ void test()
 		lstStrings.PopFront(str);
 		tick = GetTickCount64();
 	}
-	printf("lstStrings done!size %d\r\n", count - lstStrings.Size());
+	printf("lstStrings done!size %d\r\n", count - lstStrings.Size()); 
 	lstStrings.Clear();
 
 	// 第三阶段：std::list测试
