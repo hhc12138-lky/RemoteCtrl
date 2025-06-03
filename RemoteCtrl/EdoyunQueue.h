@@ -44,7 +44,7 @@ public:
 
             m_hThread = (HANDLE)_beginthread(
                 &CEdoyunQueue<T>::threadEntry,
-                0, m_hCompletionPort
+                0, this
             );
 
         }
@@ -52,11 +52,13 @@ public:
     ~CEdoyunQueue() {
         if (m_lock) return;
         m_lock = true;
-        HANDLE hTemp = m_hCompletionPort;
-            PostQueuedCompletionStatus(m_hCompletionPort, 0, NULL, NULL);
+        PostQueuedCompletionStatus(m_hCompletionPort, 0, NULL, NULL);
         WaitForSingleObject(m_hThread, INFINITE);
-        m_hCompletionPort = NULL;
-        CloseHandle(hTemp);
+        if (m_hCompletionPort != NULL) {
+            HANDLE hTemp = m_hCompletionPort;
+            m_hCompletionPort = NULL;
+            CloseHandle(hTemp);
+        }
     }
 
     // 核心接口
@@ -177,12 +179,10 @@ private:
             pParam = (PPARAM*)CompletionKey;
             DealParam(pParam);
         }
-        while (GetQueuedCompletionStatus(
-            m_hCompletionPort,
-            &dwTransferred,
-            &CompletionKey,
-            &pOverlapped,
-            0)) {
+
+        // 防御编程
+        while (GetQueuedCompletionStatus(m_hCompletionPort,&dwTransferred,&CompletionKey,&pOverlapped,0)) 
+        {
             if ((dwTransferred == 0) || (CompletionKey == NULL))
             {
                 printf("thread is prepare to exit!\r\n");
@@ -191,8 +191,10 @@ private:
             pParam = (PPARAM*)CompletionKey;
             DealParam(pParam);
         }
+        HANDLE hTemp = m_hCompletionPort;
+        m_hCompletionPort = NULL;
+        CloseHandle(hTemp);
 
-        CloseHandle(m_hCompletionPort);
     }
 
 private:

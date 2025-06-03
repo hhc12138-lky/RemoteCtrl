@@ -165,34 +165,70 @@ void func(void* arg)
 	}
 } 
 
+// 图1代码
+void test()
+{
+	//性能：CEdoyunQueue push性能高 pop性能仅1/4
+	//    list push性能比pop低
+	CEdoyunQueue<std::string> lstStrings;
+	ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64(), total = GetTickCount64();
+
+	// 第一阶段：CEDoyunQueue push测试（1000ms窗口）
+	while (GetTickCount64() - total <= 1000) {
+		lstStrings.PushBack("hello world");
+		tick0 = GetTickCount64();
+	}
+	size_t count = lstStrings.Size();
+	printf("lstStrings done!size %d\r\n", count);
+
+	// 图2代码（接续）
+	// 第二阶段：CEDoyunQueue pop测试（1000ms窗口）
+	total = GetTickCount64();
+	while (GetTickCount64() - total <= 1000) {
+		std::string str;
+		lstStrings.PopFront(str);
+		tick = GetTickCount64();
+	}
+	printf("lstStrings done!size %d\r\n", count - lstStrings.Size());
+	lstStrings.Clear();
+
+	// 第三阶段：std::list测试
+	std::list<std::string> lstData;
+	total = GetTickCount64();
+	// push测试（1000ms窗口）
+	while (GetTickCount64() - total <= 1000) {
+		lstData.push_back("hello world");
+	}
+	count = lstData.size();
+	printf("lstData push done!size %d\r\n", lstData.size());
+
+	// pop测试（250ms窗口，标注压力测试编号2401040003）
+	total = GetTickCount64();
+	while (GetTickCount64() - total <= 250) {
+		if (lstData.size() > 0) lstData.pop_front();
+	}
+	printf("lstData pop done!size %d\r\n", (count - lstData.size()) * 4);
+}
+
+// 图3注释（测试分层说明）
+/*
+1 bug测试/功能测试
+2 关键因素的测试（内存泄漏、运行的稳定性、条件性）
+3 压力测试（可靠性测试） 2401040003
+4 性能测试
+*/
+
 int main()
 {
 	if (!CEdoyunTool::Init) return 1;
 
-	printf("press any key to exit ...\r\n");
+	//printf("press any key to exit ...\r\n");
 
-	CEdoyunQueue<std::string> lstStrings;
-	ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64();
-	while (_kbhit() == 0) {
-		if (GetTickCount64() - tick0 > 1300) {
-			// 1300ms超时后推送第一条消息
-			lstStrings.PushBack("hello world");
-			tick0 = GetTickCount64();
-		}
-		if (GetTickCount64() - tick > 2000) {
-			// 2000ms超时后推送第二条消息并重置计时器
-			std::string str;
-			lstStrings.PopFront(str);
-			tick = GetTickCount64();
-			printf("pop from queue:%s\r\n", str.c_str());
-		}
-		Sleep(1);
+	for (int i = 0;i < 10;i++) {
+		test();
 	}
 
-	printf("exit done!size %d\r\n", (int)lstStrings.Size());
-	lstStrings.Clear();
-	printf("exit done!size %d\r\n", (int)lstStrings.Size());
-	::exit(0);
+	
 	/*
 	if (CEdoyunTool::IsAdmin) {
 		if (!CEdoyunTool::Init) return 1;
