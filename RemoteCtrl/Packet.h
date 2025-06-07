@@ -10,7 +10,7 @@ public:
 	CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
 	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
 		sHead = 0xFEFF;
-		nLength = nSize + 4;
+		nLength = (DWORD)(nSize + 4);
 		sCmd = nCmd;
 		if (nSize > 0) {
 			strData.resize(nSize);

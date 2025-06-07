@@ -1,6 +1,7 @@
 #pragma once
 #include "pch.h"
 #include<mutex>
+#include <list>
 
 template<class T>  // <T>提供IntelliSense的示例
 class CEdoyunQueue
@@ -128,7 +129,7 @@ private:
 
     }
 
-    DealParam(PPARAM* pParam) {
+    void DealParam(PPARAM* pParam) {
         switch (pParam->nOperator)
         {
         case EQPush:
