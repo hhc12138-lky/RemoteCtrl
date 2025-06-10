@@ -2,6 +2,8 @@
 #include "pch.h"
 #include<mutex>
 #include <list>
+#include <atomic>
+#include "EdoyunThread.h"
 
 template<class T>  // <T>提供IntelliSense的示例
 class CEdoyunQueue
@@ -50,7 +52,7 @@ public:
 
         }
     }
-    ~CEdoyunQueue() {
+    virtual ~CEdoyunQueue() {
         if (m_lock) return;
         m_lock = true;
         PostQueuedCompletionStatus(m_hCompletionPort, 0, NULL, NULL);
@@ -74,12 +76,12 @@ public:
         return ret;
     }
 
-    bool PopFront(T& data) {
+    virtual bool PopFront(T& data) {
         HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
         IocpParam Param(EQPop, data, hEvent);
         if (m_lock) {
             if (hEvent) CloseHandle(hEvent);
-            return -1;
+            return false;
         }
         bool ret = PostQueuedCompletionStatus(m_hCompletionPort, sizeof(PPARAM), (ULONG_PTR)&Param, NULL);
         if (ret == false) {
@@ -120,7 +122,7 @@ public:
         return ret;
     }
 
-private:
+protected:
     // 静态线程入口函数
     static void threadEntry(void* arg) {
         CEdoyunQueue<T>* thiz = (CEdoyunQueue<T>*)arg;
@@ -129,7 +131,7 @@ private:
 
     }
 
-    void DealParam(PPARAM* pParam) {
+    virtual void DealParam(typename CEdoyunQueue<T>::PPARAM* pParam) {
         switch (pParam->nOperator)
         {
         case EQPush:
@@ -159,7 +161,7 @@ private:
     }
 
     // 实际线程逻辑
-    void threadMain() {
+    virtual void threadMain() {
         DWORD dwTransferred = 0;	// 接收I/O操作实际传输的字节数
         PPARAM* pParam = NULL;               // 自定义任务参数结构体的二级指针（用于线程间通信）
         ULONG_PTR CompletionKey = 0;         // IOCP完成键（通常传递对象指针或会话标识）
@@ -198,7 +200,7 @@ private:
 
     }
 
-private:
+protected:
     std::list<T> m_lstData;        // 底层数据存储（双向链表）
     HANDLE m_hCompletionPort;      // IOCP完成端口句柄（注意原图拼写错误：m_hCompletionPort）
     HANDLE m_hThread;              // 工作线程句柄
@@ -206,5 +208,83 @@ private:
 };
 
 
+
+template<class T>
+class EdoyunSendQueue : public CEdoyunQueue<T>, public ThreadFuncBase
+{ 
+public:
+    typedef int (ThreadFuncBase::* EDYCALLBACK)(T& data);
+    EdoyunSendQueue(ThreadFuncBase* obj, EDYCALLBACK callback): CEdoyunQueue<T>(), m_base(obj), m_callback(callback)
+    {
+        m_thread.Start();
+        m_thread.UpdateWorker(::ThreadWorker(this, (FUNCTYPE) & EdoyunSendQueue<T>::threadTick));
+    }
+    virtual ~EdoyunSendQueue(){
+        m_base = NULL;
+        m_callback = NULL;
+        m_thread.Stop();
+    }
+protected:
+    virtual bool PopFront(T& data) { return false; };
+    bool PopFront() {
+        typename CEdoyunQueue<T>::IocpParam* Param = new typename CEdoyunQueue<T>::IocpParam(CEdoyunQueue<T>::EQPop, T());
+        if (CEdoyunQueue<T>::m_lock) {
+            delete Param;
+            return false;
+        }
+        bool ret = PostQueuedCompletionStatus(CEdoyunQueue<T>::m_hCompletionPort, sizeof(*Param), (ULONG_PTR)&Param, NULL);
+        if (ret == false) {
+            delete Param;
+            return false;
+        }
+        return ret;
+    }
+
+    int threadTick()
+    {
+        if (WaitForSingleObject(CEdoyunQueue<T>::m_hThread, 0) != WAIT_TIMEOUT)
+            return 0;
+        if (CEdoyunQueue<T>::m_lstData.size() > 0) {
+            PopFront();
+        }
+        return 0;
+    }
+    virtual void DealParam(CEdoyunQueue<T>::PPARAM* pParam) {
+        switch (pParam->nOperator)
+        {
+        case CEdoyunQueue<T>::EQPush:
+            CEdoyunQueue<T>::m_lstData.push_back(pParam->Data);
+            delete pParam;
+            break;
+        case CEdoyunQueue<T>::EQPop:
+            if (CEdoyunQueue<T>::m_lstData.size() > 0) {
+                pParam->Data = CEdoyunQueue<T>::m_lstData.front();
+                if ((m_base->*m_callback)(pParam->Data) == 0) {
+                    CEdoyunQueue<T>::m_lstData.pop_front();
+                }
+            }
+            delete pParam;
+            break;
+        case CEdoyunQueue<T>::EQSize:
+            pParam->nOperator = CEdoyunQueue<T>::m_lstData.size();
+            if (pParam->hEvent != NULL)
+                SetEvent(pParam->hEvent);
+            break;
+        case CEdoyunQueue<T>::EQClear:
+            CEdoyunQueue<T>::m_lstData.clear();
+            delete pParam;
+            break;
+        default:
+            OutputDebugString(_T("unknown operator!\r\n"));
+            break;
+        }
+    }
+
+private:
+    ThreadFuncBase* m_base;      // 线程函数基类指针（多态调用）
+    EDYCALLBACK m_callback;       // 回调函数成员（类型别名或函数指针）
+    EdoyunThread m_thread;        // 线程控制对象（封装线程操作）
+
+};
 
 

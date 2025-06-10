@@ -56,6 +56,7 @@ public:
     EdoyunThread()
     {
         m_hThread = NULL;
+        m_bStatus = false;
     }
     ~EdoyunThread() {
         Stop();
@@ -81,27 +82,35 @@ public:
     bool Stop() {
         if (m_bStatus == false)return true;
         m_bStatus = false;
-        bool ret =  WaitForSingleObject(m_hThread, INFINITE) == WAIT_OBJECT_0;
+        DWORD ret =  WaitForSingleObject(m_hThread, 1000);
+        if (ret == WAIT_TIMEOUT) {
+            TerminateThread(m_hThread, -1);
+        }
         UpdateWorker();
-        return ret;
+        return ret == WAIT_OBJECT_0;
     }
 
     // 工作分配​​ 
     void UpdateWorker(const ::ThreadWorker& worker = ::ThreadWorker()) {
-        if (!worker.IsValid()) {
-            m_worker.store(NULL);
-            return;
-        }
-        if (m_worker.load() != NULL) {
+        if (m_worker.load() != NULL && m_worker.load() != &worker) {
             ::ThreadWorker* pWorker = m_worker.load();
             m_worker.store(NULL);
             delete pWorker;
         }
+
+        if (m_worker.load() == &worker) return;
+
+        if (!worker.IsValid()) {
+            m_worker.store(NULL);
+            return;
+        }
+        
         m_worker.store(new ::ThreadWorker(worker));
     }
 
     //空闲检查 true表示空闲 false表示分配了工作
     bool IsIdle() {
+        if (m_worker.load() == NULL)return true;
         return !m_worker.load()->IsValid();// 原子加载并检查
     }
 
@@ -109,20 +118,26 @@ private:
     // 线程工作循环
     void ThreadWorker() {
         while (m_bStatus) {
+            if (m_worker.load() == NULL) {
+                Sleep(1);
+                continue;
+            }
             ::ThreadWorker worker = *m_worker.load();// 加载当前任务 worker就是m_worker所管理的ThreadWorker对象的值拷贝（副本​）
             if (worker.IsValid()) {
-                int ret = worker();// 执行任务
-                if (ret != 0) {// 非零返回值处理
-                    CString str;
-                    str.Format(_T("thread found warning code %d\r\n"), ret);
-                    OutputDebugString(str);
+                if (WaitForSingleObject(m_hThread, 0) == WAIT_TIMEOUT) {
+                    int ret = worker();// 执行任务
+                    if (ret != 0) {// 非零返回值处理
+                        CString str;
+                        str.Format(_T("thread found warning code %d\r\n"), ret);
+                        OutputDebugString(str);
+                    }
+                    if (ret < 0) {// 任务请求结束
+                        m_worker.store(NULL);// 创建默认构造的ThreadWorker对象来覆盖原来的worker，逻辑上实现清空工作单元
+                    }
                 }
-                if (ret < 0) {// 任务请求结束
-                    m_worker.store(NULL);// 创建默认构造的ThreadWorker对象来覆盖原来的worker，逻辑上实现清空工作单元
-                }
-                else {
-                    Sleep(1);// 短暂休眠避免忙等
-                }
+            }
+            else {
+                Sleep(1);// 短暂休眠避免忙等
             }
         }
     }
@@ -154,6 +169,10 @@ public:
     EdoyunThreadPool() {}
     ~EdoyunThreadPool() {
         Stop();
+        for (size_t i = 0; i < m_threads.size(); i++) {
+            delete m_threads[i];
+            m_threads[i] = NULL;
+        }
         m_threads.clear();
     }
     

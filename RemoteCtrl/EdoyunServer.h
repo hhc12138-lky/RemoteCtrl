@@ -30,9 +30,11 @@ public:
     std::vector<char> m_buffer;//缓冲区
     ThreadWorker m_worker;//处理函数
     EdoyunServer* m_server;//服务器对象
-    PCLIENT m_client;//对应的客户端
+    EdoyunClient *m_client;//对应的客户端
     WSABUF m_wsabuffer;
-
+    virtual ~EdoyunOverlapped() {
+        m_buffer.clear();
+    }
 
 };
 
@@ -47,12 +49,17 @@ typedef SendOverlapped<ESend> SENDOVERLAPPED;
 
 
 
-class EdoyunClient {
+class EdoyunClient: public ThreadFuncBase {
 public:
     EdoyunClient();
 
     ~EdoyunClient() {
+        m_buffer.clear();
         closesocket(m_sock);
+        m_recv.reset();
+        m_send.reset();
+        m_overlapped.reset();
+        m_vecSend.Clear();
     }
 
     void SetOverlapped(PCLIENT& ptr);
@@ -74,15 +81,9 @@ public:
     sockaddr_in* GetLocalAddr() { return &m_laddr;}
     sockaddr_in* GetRemoteAddr() { return &m_raddr;}
     size_t GetBufferSize()const {return m_buffer.size();}
-    int Recv() {
-        int ret = recv(m_sock, m_buffer.data()+ m_used, m_buffer.size()- m_used, 0);
-        if (ret <= 0) return -1;
-        m_used += (size_t)ret;
-
-        //TODO:解析数据尚未完成
-        return 0;
-    }
-
+    int Recv();
+    int Send(void* buffer, size_t nSize);
+    int SendData(std::vector<char>& data);
 private:
     SOCKET m_sock;
     DWORD m_received;
@@ -95,6 +96,7 @@ private:
     sockaddr_in m_laddr;
     sockaddr_in m_raddr;
     bool m_isbusy;
+    EdoyunSendQueue<std::vector<char>> m_vecSend;  //发送数据队列
 };
 
 
@@ -105,7 +107,6 @@ class AcceptOverlapped :public EdoyunOverlapped, ThreadFuncBase
 public:
     AcceptOverlapped();
     int AcceptWorker();
-    PCLIENT m_client;
 };
 
 
@@ -162,7 +163,7 @@ public:
         //m_addr.sin_addr.s_addr = inet_addr(ip.c_str());// 已弃用
         inet_pton(AF_INET, ip.c_str(), &m_addr.sin_addr);
     }
-    ~EdoyunServer() {}
+    ~EdoyunServer();
 
     bool startService();
 
@@ -203,4 +204,5 @@ private:
     sockaddr_in m_addr;
 };
 
+typedef EdoyunSendQueue<std::vector<char>>::EDYCALLBACK SENDCALLBACK;
 
