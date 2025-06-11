@@ -13,7 +13,7 @@ class ThreadWorker {
 public:
     ThreadWorker() : thiz(NULL), func(NULL) {}
 
-    ThreadWorker(ThreadFuncBase* obj, FUNCTYPE f) : thiz(obj), func(f) {}
+    ThreadWorker(void* obj, FUNCTYPE f) : thiz((ThreadFuncBase*)obj), func(f) {}
 
     ThreadWorker(const ThreadWorker& worker) {
         thiz = worker.thiz;
@@ -104,8 +104,8 @@ public:
             m_worker.store(NULL);
             return;
         }
-        
-        m_worker.store(new ::ThreadWorker(worker));
+        ::ThreadWorker* pWorker = new ::ThreadWorker(worker);
+        m_worker.store(pWorker);
     }
 
     //空闲检查 true表示空闲 false表示分配了工作
@@ -132,7 +132,9 @@ private:
                         OutputDebugString(str);
                     }
                     if (ret < 0) {// 任务请求结束
+                        ::ThreadWorker* pWorker = m_worker.load();
                         m_worker.store(NULL);// 创建默认构造的ThreadWorker对象来覆盖原来的worker，逻辑上实现清空工作单元
+                        delete pWorker;
                     }
                 }
             }
