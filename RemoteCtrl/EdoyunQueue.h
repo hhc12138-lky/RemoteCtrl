@@ -5,7 +5,8 @@
 #include <atomic>
 #include "EdoyunThread.h"
 
-template<class T>  // <T>提供IntelliSense的示例
+//基于IOCP(Input / Output Completion Port)的线程安全队列框架
+template<class T> 
 class CEdoyunQueue
 {
 public:
@@ -18,7 +19,7 @@ public:
         EQClear   // 清空队列
     };
 
-    // I/O完成端口任务参数结构体（用于线程间通信）
+    // I/O完成端口 任务参数结构体（用于线程间通信）
     typedef struct IocpParam {
         size_t nOperator;                // 操作类型标识（对应下方枚举值）
         T Data;                    // 传输的数据（模板类型T，图中示例为const char*）
@@ -37,8 +38,8 @@ public:
         }
     } PPARAM;  // 类型别名：Post Parameter（投递参数）
 
-    // 线程安全的队列（利用IOCP实现）
 public:
+    // 构造函数中创建IOCP端口和工作线程
     CEdoyunQueue() {
         m_lock = false;
         m_hCompletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);
@@ -55,7 +56,7 @@ public:
     virtual ~CEdoyunQueue() {
         if (m_lock) return;
         m_lock = true;
-        PostQueuedCompletionStatus(m_hCompletionPort, 0, NULL, NULL);
+        PostQueuedCompletionStatus(m_hCompletionPort, 0, NULL, NULL); // 向IOCP发送退出信号
         WaitForSingleObject(m_hThread, INFINITE);
         if (m_hCompletionPort != NULL) {
             HANDLE hTemp = m_hCompletionPort;
@@ -64,7 +65,7 @@ public:
         }
     }
 
-    // 核心接口
+    // 线程安全地向队列尾部添加数据
     bool PushBack(const T& data) {
         IocpParam* pParam = new IocpParam(EQPush, data);
         if (m_lock) {
@@ -75,7 +76,7 @@ public:
         if (ret == false) delete pParam;
         return ret;
     }
-
+    // 线程安全地从队列头部取出数据
     virtual bool PopFront(T& data) {
         HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
         IocpParam Param(EQPop, data, hEvent);
@@ -94,6 +95,7 @@ public:
         }
         return ret;
     }
+    // 获取当前队列大小
     size_t Size() {
         HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
         IocpParam Param(EQSize, T(), hEvent);
@@ -113,6 +115,7 @@ public:
         }
         return -1;
     }
+    // 清空队列
     bool Clear() {
         if (m_lock)return false;
         IocpParam* pParam = new IocpParam(EQClear, T());
@@ -128,9 +131,9 @@ protected:
         CEdoyunQueue<T>* thiz = (CEdoyunQueue<T>*)arg;
         thiz->threadMain();
         _endthread();
-
     }
 
+    // 处理对应指令
     virtual void DealParam(typename CEdoyunQueue<T>::PPARAM* pParam) {
         switch (pParam->nOperator)
         {
@@ -160,7 +163,7 @@ protected:
         }
     }
 
-    // 实际线程逻辑
+    // 工作线程从IOCP获取任务并执行相应操作
     virtual void threadMain() {
         DWORD dwTransferred = 0;	// 接收I/O操作实际传输的字节数
         PPARAM* pParam = NULL;               // 自定义任务参数结构体的二级指针（用于线程间通信）
@@ -209,11 +212,14 @@ protected:
 
 
 
+// 继承自CEdoyunQueue，增加了回调机制和自动处理功能。
 template<class T>
 class EdoyunSendQueue : public CEdoyunQueue<T>, public ThreadFuncBase
 { 
 public:
-    typedef int (ThreadFuncBase::* EDYCALLBACK)(T& data);
+    // 定义回调函数类型
+    typedef int (ThreadFuncBase::* EDYCALLBACK)(T& data); 
+    //启动工作线程并设置处理函数
     EdoyunSendQueue(ThreadFuncBase* obj, EDYCALLBACK callback): CEdoyunQueue<T>(), m_base(obj), m_callback(callback)
     {
         m_thread.Start();
@@ -226,6 +232,7 @@ public:
     }
 protected:
     virtual bool PopFront(T& data) { return false; };
+    // 重写获取数据方法
     bool PopFront() {
         typename CEdoyunQueue<T>::IocpParam* Param = new typename CEdoyunQueue<T>::IocpParam(CEdoyunQueue<T>::EQPop, T());
         if (CEdoyunQueue<T>::m_lock) {
@@ -240,6 +247,7 @@ protected:
         return ret;
     }
 
+    // 线程循环处理函数，自动处理队列数据
     int threadTick()
     {
         if (WaitForSingleObject(CEdoyunQueue<T>::m_hThread, 0) != WAIT_TIMEOUT)
@@ -249,6 +257,7 @@ protected:
         }
         return 0;
     }
+    // 在DealParam中调用用户定义的回调函数
     virtual void DealParam(CEdoyunQueue<T>::PPARAM* pParam) {
         switch (pParam->nOperator)
         {

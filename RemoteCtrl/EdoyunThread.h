@@ -6,8 +6,13 @@
 #include <windows.h>
 
 class ThreadFuncBase {};// 定义一个空基类，作为所有可在线程中执行的工作类的基类
-typedef int (ThreadFuncBase::* FUNCTYPE)();// 定义统一的成员函数指针类型
-//ThreadFuncBase* 是普通的​​对象指针​；ThreadFuncBase::* 是一个​​成员指针声明符​​的一部分，用于声明指向类成员的指针（通常是成员函数指针），必须与具体类型结合使用，比如 FUNCTYPE funcPtr = &DerivedClass::someMethod; 
+/*
+ 定义统一的成员函数指针类型
+ ThreadFuncBase* 是普通的​​对象指针​；ThreadFuncBase::* 是一个​​成员指针声明符​​的一部分，用于声明指向类的成员的指针（通常是成员函数指针）；
+ 必须与具体类型结合使用，比如 FUNCTYPE funcPtr = &DerivedClass::someMethod;
+*/
+typedef int (ThreadFuncBase::* FUNCTYPE)();
+
 
 class ThreadWorker {
 public:
@@ -30,9 +35,11 @@ public:
 
     // 函数调用运算符重载
     int operator()() {
-        //通过重载 operator() 使得类的对象可以像函数一样被调用。即仿函数(Functor)模式，比如：
-        //ThreadWorker worker(obj, &MyClass::doWork); // 创建工作单元
-        //int result = worker(); // 像调用函数一样使用对象
+        /*
+        通过重载 operator() 使得类的对象可以像函数一样被调用。即仿函数(Functor)模式，比如：
+        ThreadWorker worker(obj, &MyClass::doWork); // 创建工作单元
+        int result = worker(); // 像调用函数一样使用对象
+        */
         if (IsValid()) {
             return (thiz->*func)();
         }
