@@ -230,7 +230,7 @@ int main()
 
 	
 	/*
-	if (CEdoyunTool::IsAdmin) {
+	if (CEdoyunTool::IsAdmin) { 
 		if (!CEdoyunTool::Init) return 1;
 		if (!ChooseAutoInvoke(INVOKE_PATH)) {
 			CCommand cmd;
