@@ -167,9 +167,9 @@ bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed
 		//发送失败也要删除堆对象
 		delete pData;
 	}
-
 	return ret;
 }
+
 /*
 bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed)
 {
@@ -233,6 +233,7 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 			while (m_sock != INVALID_SOCKET) {
 				// 根据m_sock套接字接收数据，从pBuffer + index位置开始存放，最多存储BUFFER_SIZE - index个字节
 				int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);
+				if (length == -1) TRACE("接收数据失败,errno: %d", errno);
 				if (length > 0 || index >0){
 					index += (size_t) length; // recv成功后 index更新到最尾部
 					size_t nLen = index; // nLen记录缓冲区最新数据的总长度
@@ -251,9 +252,9 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 					}
 				}
 				else {//TODO:对方关闭了套接字 或者 网络设备异常
+					TRACE("接收数据失败,errno: %d",errno);
 					CloseSocket();
 					::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(current.sCmd, NULL, 0), 1); // 最后一个包应答一个空
-
 				}
 			}
 		}

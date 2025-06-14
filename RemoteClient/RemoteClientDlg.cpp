@@ -221,12 +221,12 @@ void CRemoteClientDlg::InitUIData()
 
 	// 1.本地测试用
 	//m_server_address = 0x0A00020F; // 10.0.2.15（需根据实际修改）
-	//m_server_address = 0x7F000001; // 127.0.0.1（本地测试用）
-	//m_nPort = _T("9527");
+	m_server_address = 0x7F000001; // 127.0.0.1（本地测试用）
+	m_nPort = _T("9527");
 
 	//2.虚拟机测试用 注意我的虚拟机使用NAT+端口转发实现内部网络访问 目前本机的127.0.0.1:11528 映射到虚拟机网络的127.0.0.1:9527
-	m_server_address = 0x7F000001; // 127.0.0.1（本地测试用）
-	m_nPort = _T("11528");
+	//m_server_address = 0x7F000001; // 127.0.0.1（本地测试用）
+	//m_nPort = _T("11528");
 
 	CClientController* pController = CClientController::getInstance();
 	pController->UpdataAddress(m_server_address, atoi((LPCTSTR)m_nPort));
