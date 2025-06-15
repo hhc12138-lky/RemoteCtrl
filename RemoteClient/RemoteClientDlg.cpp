@@ -341,6 +341,8 @@ void CRemoteClientDlg::LoadFileInfo()
 	当用户点击树控件的某个节点时，加载该路径下的文件和子目录。
 	如果是目录，则在树控件中显示子目录；如果是文件，则在列表控件中显示。
 	*/
+
+	//!!!获取鼠标控件信息时，不要打断点测试！因为打断点的话GetCursorPos(&ptMouse);得到的坐标就不是原来的了!!!
 	// 获取鼠标位置并转换为树控件坐标
 	CPoint ptMouse;
 	GetCursorPos(&ptMouse);
@@ -392,7 +394,6 @@ void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree)
 // 树控件双击事件
 void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 {
-	// TODO: 在此添加控件通知处理程序代码
 	*pResult = 0;
 	LoadFileInfo();
 }
@@ -400,7 +401,6 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 // 树控件单击事件​
 void CRemoteClientDlg::OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 {
-	// TODO: 在此添加控件通知处理程序代码
 	*pResult = 0;
 	LoadFileInfo();
 }

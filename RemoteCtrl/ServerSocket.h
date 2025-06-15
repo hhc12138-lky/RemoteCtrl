@@ -133,7 +133,7 @@ protected:
 	}
 
 	void CloseClient() {
-		if (m_client == INVALID_SOCKET) {
+		if (m_client != INVALID_SOCKET) {
 			closesocket(m_client);
 			m_client = INVALID_SOCKET;
 		}

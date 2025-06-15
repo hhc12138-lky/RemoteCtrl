@@ -170,38 +170,6 @@ bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed
 	return ret;
 }
 
-/*
-bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed)
-{
-
-	// 如果Socket未连接且工作线程未启动，创建新的工作线程（懒初始化）
-	if (m_sock == INVALID_SOCKET && m_hThread == INVALID_HANDLE_VALUE) {
-		m_hThread = (HANDLE)_beginthread(&CClientSocket::threadEntry, 0, this);
-	}
-	m_lock.lock();// 互斥锁(m_lock)保护共享资源
-	// 将事件句柄与返回包列表关联 注意这里存的是&，所以后续操作m_mapAck的元素时会影响到lstPacks
-	// 实际上，就在CClientSocket::threadFunc()中会将接受到的包插入m_mapAck->senond中
-	auto pr = m_mapAck.insert(std::pair<HANDLE, std::list<CPacket>&>(pack.hEvent, lstPacks)); // insert返回的是<pair_iterator,bool>
-	// 记录是否需要自动关闭
-	m_mapAutoClosed.insert(std::pair<HANDLE, bool>(pack.hEvent, isAutoClosed));
-	// 加入发送队列，工作线程(threadFunc)会不断从该队列取出数据发送
-	m_lstSend.push_back(pack);
-	m_lock.unlock();
-
-	//同步等待响应​
-	WaitForSingleObject(pack.hEvent, INFINITE);
-	//查找并清理事件映射
-	std::map<HANDLE, std::list<CPacket>&>::iterator it = m_mapAck.find(pack.hEvent);
-	if (it != m_mapAck.end()) {
-		m_lock.lock();
-		m_mapAck.erase(it);
-		m_lock.unlock();
-		return true;
-	}
-	return false;
-}
-*/
-
 bool CClientSocket::Send(const CPacket& pack)
 {
 	// 直接将包序列化为数据流 然后发送
@@ -230,6 +198,8 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 			strBuffer.resize(BUFFER_SIZE);
 			char* pBuffer = (char*)strBuffer.c_str();
 
+
+			// 这个方法是可以解决粘包问题的，服务端发完数据会关闭套接字，recv就会返回0，一直while直到读完数据。
 			while (m_sock != INVALID_SOCKET) {
 				// 根据m_sock套接字接收数据，从pBuffer + index位置开始存放，最多存储BUFFER_SIZE - index个字节
 				int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);
