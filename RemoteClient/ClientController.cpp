@@ -6,6 +6,7 @@ std::map<UINT, CClientController::MSGFUNC> CClientController::m_mapFunc;
 CClientController* CClientController::m_pInstance = NULL;
 CClientController::CHelper CClientController::m_helper; 
 
+// 单例获取
 CClientController* CClientController::getInstance()
 {
 	// 懒汉式单例模式，首次调用时创建实例
@@ -67,21 +68,77 @@ bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, 
 	return ret;
 }
 
+
+// 启动视频监控
+void CClientController::StartWatchScreen()
+{
+	m_isClosed = false; // 将监控标志位设为false，表示监控开始
+	m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchScreenEntry, 0, this); // 开启监控线程
+	m_watchDlg.DoModal();// 以模态方式显示监控窗口，阻塞当前线程直到对话框关闭
+	m_isClosed = true;// 设置关闭标志通知监控线程退出
+	WaitForSingleObject(m_hThreadWatch, 500); // 等待最多500ms让线程安全退出
+}
+
+// 文件下载结束
+void CClientController::DownloadEnd()
+{
+	m_statusDlg.ShowWindow(SW_HIDE);
+	m_remoteDlg.EndWaitCursor();
+	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
+}
+
+// 下载文件处理过程
+int CClientController::DownFile(CString strPath)
+{
+	//创建"另存为"对话框
+	CFileDialog dlg(FALSE, NULL, strPath, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, NULL, &m_remoteDlg);
+	//用户点击"保存"后执行下载准备
+	if (dlg.DoModal() == IDOK) {
+		m_strRemote = strPath; // 获取用户选择的远程文件路径
+		m_strLocal = dlg.GetPathName(); // 获取用户选择的本地保存路径
+
+		FILE* pFile = fopen(m_strLocal, "wb+");
+		if (pFile == NULL) {
+			AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！！"));
+			return -1;
+		}
+		// 打开的文件通过参数pFile传入 在Command.h的DownloadFile内关闭
+		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);
+
+		// 创建下载线程 指定threadDownloadEntry为中转函数 传递this指针以便访问成员变量
+		//m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+		// 立即检查下载线程是否已经意外终止
+		//if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
+		//	return -1;
+		//}
+
+		// UI状态更新​
+		m_remoteDlg.BeginWaitCursor();  // 显示等待光标
+		m_statusDlg.m_info.SetWindowText(_T("命令正在执行中！"));  // 设置状态文本
+		m_statusDlg.ShowWindow(SW_SHOW);  // 显示状态对话框
+		m_statusDlg.CenterWindow(&m_remoteDlg);  // 居中显示
+		m_statusDlg.SetActiveWindow();  // 设为活动窗口
+	}
+	return 0;
+}
+
 /*视频监控线程********************************************************************************************************/
 void CClientController::threadWatchScreen()
 {
 	Sleep(50);
 	ULONGLONG nTick = GetTickCount64();
+	//当监视未关闭时，更新数据到缓存
 	while (!m_isClosed) {
-		//当监视未关闭时，更新数据到缓存
+		//检查屏幕数据缓存是否已满 没有满就发送屏幕图像请求
 		if (m_watchDlg.isFull() == false) {
-			// 发送图片 休眠50ms一张图片
+			// 每200毫秒发送一次请求（约5帧/秒）
 			if (GetTickCount64() - nTick < 200) {
 				Sleep(200 - DWORD(GetTickCount64() - nTick));
 			}
 			nTick = GetTickCount64();
 
-			int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(),6, true, NULL, 0);
+			//发送屏幕请求​
+			int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(), 6, true, NULL, 0); 
 			if (ret == 1) {
 				//TRACE("成功发送图片请求命令\r\n");
 			}
@@ -100,58 +157,10 @@ void CClientController::threadWatchScreenEntry(void* arg)
 	thiz->threadWatchScreen();
 	_endthread();
 }
-
-void CClientController::StartWatchScreen()
-{
-	m_isClosed = false; // 将监控标志位设为false，表示监控开始
-	m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchScreenEntry, 0, this);
-	m_watchDlg.DoModal();// 以模态方式显示监控窗口，阻塞当前线程直到对话框关闭
-	m_isClosed = true;// 设置关闭标志通知监控线程退出
-	WaitForSingleObject(m_hThreadWatch, 500); // 等待最多500ms让线程安全退出
-}
-
-void CClientController::DownloadEnd()
-{
-	m_statusDlg.ShowWindow(SW_HIDE);
-	m_remoteDlg.EndWaitCursor();
-	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
-}
-
-int CClientController::DownFile(CString strPath)
-{
-	//创建"另存为"对话框
-	CFileDialog dlg(FALSE, NULL, strPath, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, NULL, &m_remoteDlg);
-	//用户点击"保存"后执行下载准备
-	if (dlg.DoModal() == IDOK) {
-		m_strRemote = strPath; // 获取用户选择的远程文件路径
-		m_strLocal = dlg.GetPathName(); // 获取用户选择的本地保存路径
-
-		FILE* pFile = fopen(m_strLocal, "wb+");
-		if (pFile == NULL) {
-			AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！！"));
-			return -1;
-		}
-		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);
-		// 创建下载线程 指定threadDownloadEntry为中转函数 传递this指针以便访问成员变量
-		//m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-
-		// 立即检查下载线程是否已经意外终止
-		//if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
-		//	return -1;
-		//}
-
-		// UI状态更新​
-		m_remoteDlg.BeginWaitCursor();  // 显示等待光标
-		m_statusDlg.m_info.SetWindowText(_T("命令正在执行中！"));  // 设置状态文本
-		m_statusDlg.ShowWindow(SW_SHOW);  // 显示状态对话框
-		m_statusDlg.CenterWindow(&m_remoteDlg);  // 居中显示
-		m_statusDlg.SetActiveWindow();  // 设为活动窗口
-	}
-
-	return 0;
-}
+/*视频监控线程********************************************************************************************************/
 
 
+/*消息处理线程********************************************************************************************************/
 void CClientController::threadFunc()
 {
 	MSG msg;
@@ -187,7 +196,6 @@ void CClientController::threadFunc()
 				(this->*(it->second))(msg.message, msg.wParam, msg.lParam);
 			}
 		}
-		
 	}
 }
 
@@ -202,12 +210,14 @@ unsigned __stdcall CClientController::threadEntry(void* arg)
 
 /*消息处理函数********************************************************************************************************/
 
+// 自定义消息WM_SHOW_STATUS对应的处理函数
 LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
 	// 非模态展示状态对话框
 	return m_statusDlg.ShowWindow(SW_SHOW);
 }
 
+// 自定义消息WM_SHOW_WATCH对应的处理函数
 LRESULT CClientController::OnShowWatcher(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
 	// 以阻塞方式显示监控对话框

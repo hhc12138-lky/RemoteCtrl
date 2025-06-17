@@ -182,11 +182,11 @@ protected:
 			FILEINFO finfo;
 			finfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0;
 			memcpy(finfo.szFileName, fdata.name, strlen(fdata.name));
-			TRACE("%s\r\n", finfo.szFileName);
+			//TRACE("%s\r\n", finfo.szFileName);
 			listPackets.push_back(CPacket(2, (BYTE*)&finfo, sizeof(finfo)));
 			count++;
 		} while (!_findnext(hfind, &fdata));
-		TRACE("server: count = %d\r\n", count);
+		TRACE("MakeDirectoryInfo server total count = %d\r\n", count);
 		// 发送结束信息到控制端
 		FILEINFO finfo;
 		finfo.HasNext = FALSE;
@@ -202,27 +202,31 @@ protected:
 		return 0;
 	}
 
-	// 下载文件
+	// 将指定文件内容分块打包传输
 	int DownloadFile(std::list<CPacket>& listPackets, CPacket& inPacket) {
 		// 从输入数据包中获取文件路径
 		std::string strPath = inPacket.strData;
 		long long data = 0; // 初始化文件大小为0
 		FILE* pFile = NULL; // 文件指针初始化为NULL
-		errno_t err = fopen_s(&pFile, strPath.c_str(), "rb");// 安全方式打开文件（二进制只读模式）
-		if (err != 0) { // 如果打开文件失败
-			// 推送一个包含0值(8字节)的数据包(命令号4)表示文件大小为0
+		errno_t err = fopen_s(&pFile, strPath.c_str(), "rb");// 安全方式打开文件（二进制只读模式），打开成功则返回0
+		if (err != 0) {
+			// 如果打开文件失败，推送一个包含0值(8字节)的数据包(命令号4)表示文件大小为0
 			listPackets.push_back(CPacket(4, (BYTE*)&data, 8));
 			return -1;
 		}
 
 		// 检查文件指针是否有效（冗余检查，因为fopen_s失败时pFile已经是NULL）
 		if (pFile != NULL) {
+			// 获取文件大小
 			fseek(pFile, 0, SEEK_END); // 将文件指针移动到文件末尾
-			data = _ftelli64(pFile); // 获取当前文件指针位置（即文件大小），_ftelli64支持大于2GB的文件
-			listPackets.push_back(CPacket(4, (BYTE*)&data, 8)); // 推送文件大小信息(命令号4，8字节)
-			fseek(pFile, 0, SEEK_SET); // 将文件指针重置回文件开头
+			data = _ftelli64(pFile); // 获取当前文件指针位置（即文件末尾 == 文件大小），_ftelli64支持大于2GB的文件
+			listPackets.push_back(CPacket(4, (BYTE*)&data, 8)); // 推送文件大小信息(命令号4，8字节)，文件传输第一个包一定是文件大小信息，不含文件内容
+
+			// 将文件指针重置回文件开头
+			fseek(pFile, 0, SEEK_SET); 
 			char buffer[1024] = ""; // 定义1KB的缓冲区
 			size_t rlen = 0; // 初始化读取长度为0
+
 			// 循环读取文件内容，每次读取最多1024字节， 将读取的数据推送为数据包(命令号4)
 			do {
 				rlen = fread(buffer, 1, 1024, pFile);
@@ -307,6 +311,7 @@ protected:
 			break;
 		case 0x41://左键按下
 			mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, GetMessageExtraInfo());
+			TRACE("mouse event: 左键按下\r\n");
 			break;
 		case 0x81://左键放开
 			mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, GetMessageExtraInfo());
@@ -339,13 +344,14 @@ protected:
 			break;
 		case 0x08://单纯的鼠标移动
 			mouse_event(MOUSEEVENTF_MOVE, mouse.ptXY.x, mouse.ptXY.y, 0, GetMessageExtraInfo());
+			TRACE("mouse event: 单纯的鼠标移动\r\n");
 			break;
 		}
 		listPackets.push_back(CPacket(5, NULL, 0));
 		return 0;
 	}
 
-	// 屏幕截图​
+	// 发送屏幕截图​
 	int SendScreen(std::list<CPacket>& listPackets, CPacket& inPacket)
 	{
 		CImage screen;//GDI

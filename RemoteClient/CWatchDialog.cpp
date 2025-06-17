@@ -32,7 +32,7 @@ void CWatchDialog::DoDataExchange(CDataExchange* pDX)
 }
 
 
-// 消息映射表​
+// 消息映射表​ 
 BEGIN_MESSAGE_MAP(CWatchDialog, CDialog)
 	ON_WM_TIMER()                // 定时器消息
 	ON_WM_LBUTTONDBLCLK()        // 左键双击
@@ -45,7 +45,7 @@ BEGIN_MESSAGE_MAP(CWatchDialog, CDialog)
 	ON_STN_CLICKED(IDC_WATCH, &CWatchDialog::OnStnClickedWatch)  // 图片控件点击
 	ON_BN_CLICKED(IDC_BTN_LOCK, &CWatchDialog::OnBnClickedBtnLock)    // "锁定"按钮点击
 	ON_BN_CLICKED(IDC_BTN_UNLOCK, &CWatchDialog::OnBnClickedBtnUnlock) // "解锁"按钮点击
-	ON_MESSAGE(WM_SEND_PACK_ACK,&CWatchDialog::OnSendPackAck)
+	ON_MESSAGE(WM_SEND_PACK_ACK,&CWatchDialog::OnSendPackAck)	// 接收服务端的包应答的消息
 END_MESSAGE_MAP()
 
 
@@ -105,6 +105,7 @@ void CWatchDialog::OnTimer(UINT_PTR nIDEvent)
 	CDialog::OnTimer(nIDEvent);  // 调用基类处理
 }
 
+// 本地线程通过WM_SEND_PACK_ACK信号通知CWatchDialog的线程，然后触发该函数
 LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 {
 	if (lParam == -1 || lParam == -2) {
@@ -118,8 +119,8 @@ LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 			delete (CPacket*)wParam;; // 为了数据包的跨线程通信，发送线程那边制造了个堆对象，在这里获得后需要释放内存
 
 			switch (head.sCmd) {
-			case 6:
-			{
+			case 6: // 同步屏幕图像
+			{ 
 				CEdoyunTool::Bytes2Image(m_image, head.strData);
 				CRect rect;
 				m_picture.GetWindowRect(rect);  // 获取图片控件尺寸
@@ -136,7 +137,7 @@ LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 				m_image.Destroy();  // 销毁图像
 				break;
 			}
-			case 5:
+			case 5: // 鼠标操作完成
 				TRACE("远程端应答了鼠标操作\r\n");
 				break;
 			case 7:
@@ -171,7 +172,10 @@ void CWatchDialog::OnLButtonDblClk(UINT nFlags, CPoint point)
 void CWatchDialog::OnLButtonDown(UINT nFlags, CPoint point)
 {
 	if ((m_nObjWidth != -1) && (m_nObjHeight != -1)) {
+		TRACE("坐标转换前 point x=%d y=%d\r\n", point.x, point.y);
 		CPoint remote = UserPoint2RemoteScreenPoint(point);
+		TRACE("坐标转换后 point x=%d y=%d\r\n", point.x, point.y);
+		TRACE("坐标转换后 remote:%d %d\r\n", remote.x, remote.y);
 		MOUSEEV event;
 		event.ptXY = remote;
 		event.nButton = 0;  // 左键

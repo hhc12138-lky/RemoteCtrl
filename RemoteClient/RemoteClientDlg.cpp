@@ -90,7 +90,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_TIMER()  // 定时器消息
 	ON_NOTIFY(IPN_FIELDCHANGED, IDC_IPADDRESS_SERV, &CRemoteClientDlg::OnIpnFieldchangedIpaddressServ)  // IP控件变化
 	ON_EN_CHANGE(IDC_EDIT_PORT, &CRemoteClientDlg::OnEnChangeEditPort)  // 端口编辑框变化
-	ON_MESSAGE(WM_SEND_PACK_ACK, &CRemoteClientDlg::OnSendPackAck)
+	ON_MESSAGE(WM_SEND_PACK_ACK, &CRemoteClientDlg::OnSendPackAck) // 服务端响应的包通过线程使用WM_SEND_PACK_ACK消息转发到OnSendPackAck这里，然后进行处理
 
 END_MESSAGE_MAP()
 
@@ -186,17 +186,18 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 
 void CRemoteClientDlg::DealCommand(WORD nCmd, const std::string& strData, LPARAM lParam)
 {
+	// 每次仅更新一个包的数据
 	switch (nCmd) {
-	case 1:// 获取驱动信息
+	case 1: // 获取服务端驱动信息
 		Str2Tree(strData, m_Tree);
 		break;
-	case 2://文件信息
+	case 2: //更新服务端返回的文件信息
 		UpdataFileInfo(*(PFILEINFO)strData.c_str(), (HTREEITEM)lParam);
 		break;
 	case 3:
 		MessageBox("打开文件完成！", "操作完成", MB_ICONINFORMATION);
 		break;
-	case 4:
+	case 4: // 更新下载文件进度
 		UpdataDownloadFile(strData, (FILE*)lParam);
 		break;
 	case 9:
@@ -220,12 +221,12 @@ void CRemoteClientDlg::InitUIData()
 	UpdateData();
 
 	// 1.本地测试用
-	//m_server_address = 0x0A00020F; // 10.0.2.15（需根据实际修改）
-	m_server_address = 0x7F000001; // 127.0.0.1（本地测试用）
+	m_server_address = 0x7F000001; // 127.0.0.1
 	m_nPort = _T("9527");
 
 	//2.虚拟机测试用 注意我的虚拟机使用NAT+端口转发实现内部网络访问 目前本机的127.0.0.1:11528 映射到虚拟机网络的127.0.0.1:9527
-	//m_server_address = 0x7F000001; // 127.0.0.1（本地测试用）
+	// //m_server_address = 0x0A00020F; // 10.0.2.15（需根据实际修改）
+	//m_server_address = 0x7F000001; // 127.0.0.1
 	//m_nPort = _T("11528");
 
 	CClientController* pController = CClientController::getInstance();
@@ -308,23 +309,28 @@ void CRemoteClientDlg::UpdataFileInfo(const FILEINFO& finfo, HTREEITEM hParent)
 void CRemoteClientDlg::UpdataDownloadFile(const std::string& strData, FILE* pFile)
 {
 	static LONGLONG length = 0, index = 0;
-	length = *(long long*)strData.c_str();
-	if (length == 0) {
-		AfxMessageBox("文件长度为零或者无法读取文件！！！");
-		CClientController::getInstance()->DownloadEnd();
+	TRACE("length %d index %d\r\n", length, index);
+	if (length == 0) { 
+		// 默认第一个包发送的数据为文件长度 没有文件内容 所以用下面的方式自动解析首个包为文件长度
+		length = *(long long*)strData.c_str();
+		if (length == 0) {
+			AfxMessageBox("文件长度为零或者无法读取文件！！！");
+			CClientController::getInstance()->DownloadEnd();
+		}
 	}
 	else if (length > 0 && (index >= length)) {
+		// 文件读取完成 防御性编程
 		fclose(pFile);
 		length = 0;
 		index = 0;
 		CClientController::getInstance()->DownloadEnd();
-
 	}
 	else {
-		fwrite(strData.c_str(), 1,strData.size(), pFile);
+		// 写入图文件内容
+		fwrite(strData.c_str(), 1, strData.size(), pFile);
 		index += strData.size();
-
-		// 判断是否读取完成
+		// 每次写入后判断是否读取完成
+		TRACE("index = %d\r\n", index);
 		if (index >= length) {
 			fclose(pFile);
 			length = 0;
@@ -507,7 +513,6 @@ void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 
 void CRemoteClientDlg::OnTimer(UINT_PTR nIDEvent)
 {
-	// TODO: 在此添加消息处理程序代码和/或调用默认值
 
 	CDialogEx::OnTimer(nIDEvent);
 }
@@ -516,7 +521,6 @@ void CRemoteClientDlg::OnTimer(UINT_PTR nIDEvent)
 void CRemoteClientDlg::OnIpnFieldchangedIpaddressServ(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	LPNMIPADDRESS pIPAddr = reinterpret_cast<LPNMIPADDRESS>(pNMHDR);
-	// TODO: 在此添加控件通知处理程序代码
 	*pResult = 0;
 	UpdateData();
 	CClientController* pController = CClientController::getInstance();
@@ -546,7 +550,7 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 		if (wParam != NULL) {
 			CPacket head = *(CPacket*)wParam;
 			delete (CPacket*)wParam;; // 为了数据包的跨线程通信，发送线程那边制造了个堆对象，在这里获得后需要释放内存
-			DealCommand(head.sCmd, head.strData, lParam);
+			DealCommand(head.sCmd, head.strData, lParam); // 将服务端发送过来的包内的数据根据对应的指令号进行处理
 		}
 	}
 	return 0;

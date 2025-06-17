@@ -44,11 +44,12 @@ public:
 				count++;
 			}
 
-			// 处理客户端命令
+			// DealCommand();中recv等待，接着并解析客户端包进入m_packet，返回为指令号
 			int ret = DealCommand();
 			if (ret > 0) {
 				// 调用回调函数处理业务逻辑 响应包存回lstPackets
-				m_callback(arg, ret, lstPackets, m_packet);
+				// callback 就是 &CCommand::RunCommand，lstPackets存储发送包，m_packet传递客户端指令
+				m_callback(arg, ret, lstPackets, m_packet); 
 				// 发送响应包
 				while (lstPackets.size() > 0) {
 					Send(lstPackets.front());
@@ -88,6 +89,7 @@ protected:
 
 #define BUFFER_SIZE 4096
 	int DealCommand() {
+		//用于接收客户端指令 并且解析为packet，返回为指令号
 		if (m_client == -1)return -1;
 		char* buffer = new char[BUFFER_SIZE];// 动态分配缓冲区
 		if (buffer == NULL) {
@@ -104,11 +106,10 @@ protected:
 				delete[]buffer; // 接收失败
 				return -1;
 			}
-			TRACE("recv %d\r\n", len);
 			index += len;
 			len = index;
 
-			// 尝试解析数据包 若为有效命令则直接返回
+			// 由于客户端的指令都是一个个发的，不存在多包现象，这里尝试解析数据包 若为有效命令则直接返回这个packet
 			m_packet = CPacket((BYTE*)buffer, len);
 			if (len > 0) {
 				memmove(buffer, buffer + len, BUFFER_SIZE - len);

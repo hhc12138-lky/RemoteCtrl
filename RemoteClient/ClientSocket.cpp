@@ -180,6 +180,8 @@ bool CClientSocket::Send(const CPacket& pack)
 	return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
 }
 
+
+// 发送请求包-接收返回数据-转发数据到对应处理线程
 void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 {
 	PACKET_DATA data = *(PACKET_DATA*)wParam;
@@ -198,7 +200,6 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 			strBuffer.resize(BUFFER_SIZE);
 			char* pBuffer = (char*)strBuffer.c_str();
 
-
 			// 这个方法是可以解决粘包问题的，服务端发完数据会关闭套接字，recv就会返回0，一直while直到读完数据。
 			while (m_sock != INVALID_SOCKET) {
 				// 根据m_sock套接字接收数据，从pBuffer + index位置开始存放，最多存储BUFFER_SIZE - index个字节
@@ -210,8 +211,9 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 					CPacket pack((BYTE*)pBuffer, nLen); // 将这段长度的数据尝试解析为一个CPacket结构体， 解析不成功nLen变成0， 成功返回nLen变成实际解析掉的长度（<=index）
 					if (nLen > 0) {
 						// 为了实现跨线程的消息发送，这里把pack在堆上new了个对象，包装后发送，记得要在消息处理线程中，处理完成后delete掉
+						// hWnd代表不同Dialog的句柄，CWatchDialog和CRemoteClientDlg都绑定了对于WM_SEND_PACK_ACK消息的触发处理
 						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam); 
-						if (data.nMode == CSM_AUTOCLOSE) {
+						if (data.nMode & CSM_AUTOCLOSE) {
 							CloseSocket();
 							return;
 						}
@@ -221,8 +223,7 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 						memmove(pBuffer, pBuffer + nLen, index);
 					}
 				}
-				else {//TODO:对方关闭了套接字 或者 网络设备异常
-					TRACE("接收数据失败,errno: %d",errno);
+				else {//对方关闭了套接字 或者 网络设备异常
 					CloseSocket();
 					::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(current.sCmd, NULL, 0), 1); // 最后一个包应答一个空
 				}
@@ -241,7 +242,7 @@ void CClientSocket::SendPack(UINT nMSg, WPARAM wParam, LPARAM lParam)
 
 }
 
-/*数据包发送与返回处理线程**********************************************************************************/
+/*网络消息处理线程/数据包发送与返回处理线程**********************************************************************************/
 unsigned CClientSocket::threadEntry(void* arg)
 {
 	CClientSocket* thiz = (CClientSocket*)arg;
@@ -324,7 +325,7 @@ void CClientSocket::threadFunc()
 }
 */
 
-
+// 网络消息处理线程核心函数
 void CClientSocket::threadFunc2()
 {
 	SetEvent(m_eventInvoke); // 线程启动了 通知下外层的WaitForSingleObject

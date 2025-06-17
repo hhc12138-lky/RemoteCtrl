@@ -241,7 +241,7 @@ private:
 	UINT m_nThreadID;
 	typedef void(CClientSocket::* MSGFUNC)(UINT, WPARAM, LPARAM);
 	std::map<UINT, MSGFUNC> m_mapFunc;
-	HANDLE m_hThread;
+	HANDLE m_hThread; // 网络消息处理线程的句柄
 	bool m_bAutoClose;
 	std::mutex m_lock;
 	std::list<CPacket> m_lstSend;

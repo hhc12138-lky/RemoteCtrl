@@ -24,7 +24,6 @@ public:
 	// 启动主界面
 	int Invoke(CWnd*& pMainWnd);
 
-
 	// 更新服务器地址
 	void UpdataAddress(int nIP, int nPort) {
 		CClientSocket::getInstance()->UpdataAddress(nIP, nPort);
@@ -59,9 +58,9 @@ public:
 		return CEdoyunTool::Bytes2Image(image, pClient->GetPacket().strData);
 	}
 
-	// 开始屏幕监控
+	// 屏幕监控
 	void StartWatchScreen();
-
+	// 下载文件结束
 	void DownloadEnd();
 	// 下载文件
 	int DownFile(CString strPath);
@@ -92,7 +91,7 @@ protected:
 	*/
 
 	// 构造与析构
-	CClientController():m_statusDlg(&m_remoteDlg),m_watchDlg(&m_remoteDlg) {
+	CClientController() :m_statusDlg(&m_remoteDlg),m_watchDlg(&m_remoteDlg) {
 		m_isClosed = true;
 		m_hThreadWatch = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE;
@@ -100,7 +99,6 @@ protected:
 	}
 	~CClientController() {
 		WaitForSingleObject(m_hThread, 100);
-
 	}
 
 	//消息处理线程
@@ -155,7 +153,7 @@ private:
 	// 用于消息处理的 “函数指针类型”
 	typedef LRESULT(CClientController::* MSGFUNC)(UINT, WPARAM, LPARAM);
 	static std::map<UINT, MSGFUNC> m_mapFunc;// 消息映射表
-	CWatchDialog m_watchDlg;// 监控对话框 // TODO:消息包在对话框关闭后可能导致内存泄漏
+	CWatchDialog m_watchDlg;// 监控对话框 
 	CRemoteClientDlg m_remoteDlg;// 主对话框
 	CStatusDlg m_statusDlg;// 状态对话框
 

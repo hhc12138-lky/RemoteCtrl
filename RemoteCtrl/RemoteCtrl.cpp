@@ -58,71 +58,92 @@ void iocp();
 void udp_server();
 void udp_client(bool ishost = true);
 
-int main(int argc, char* argv[])
-{
-    if (!CEdoyunTool::Init()) return 1;  //判断初始化是否成功
-    //initsock();
-    //if (argc == 1) { //服务器代码
-    //    char wstrDir[MAX_PATH];
-    //    GetCurrentDirectoryA(MAX_PATH, wstrDir);
-    //    STARTUPINFOA si;
-    //    PROCESS_INFORMATION pi;
-    //    memset(&si, 0, sizeof(si));
-    //    memset(&pi, 0, sizeof(pi));
-    //    string strCmd = argv[0];
-    //    strCmd += " 1";
-    //    BOOL bRet = CreateProcessA(NULL, (LPSTR)strCmd.c_str(), NULL, NULL, FALSE, 0, NULL, wstrDir, &si, &pi);
-    //    if (bRet) {
-    //        CloseHandle(pi.hThread);
-    //        CloseHandle(pi.hProcess);
-    //        TRACE("进程ID:%d\r\n", pi.dwProcessId);
-    //        TRACE("线程ID:%d\r\n", pi.dwThreadId);
-    //        strCmd += " 2";
-    //        BOOL bRet = CreateProcessA(NULL, (LPSTR)strCmd.c_str(), NULL, NULL, FALSE, 0, NULL, wstrDir, &si, &pi);
-    //        if (bRet) {
-    //            CloseHandle(pi.hThread);
-    //            CloseHandle(pi.hProcess);
-    //            TRACE("进程ID:%d\r\n", pi.dwProcessId);
-    //            TRACE("线程ID:%d\r\n", pi.dwThreadId);
-    //            udp_server();//服务器代码
-    //        }
-    //    }
-    //}
-    //else if (argc == 2) { //主客户端代码
-    //    udp_client();
-    //}
-    //else {  //从客户端代码
-    //    udp_client(false);
-    //}
-    //clearsock();
+//int main(int argc, char* argv[])
+//{
+//    if (!CEdoyunTool::Init()) return 1;  //判断初始化是否成功
+//    //initsock();
+//    //if (argc == 1) { //服务器代码
+//    //    char wstrDir[MAX_PATH];
+//    //    GetCurrentDirectoryA(MAX_PATH, wstrDir);
+//    //    STARTUPINFOA si;
+//    //    PROCESS_INFORMATION pi;
+//    //    memset(&si, 0, sizeof(si));
+//    //    memset(&pi, 0, sizeof(pi));
+//    //    string strCmd = argv[0];
+//    //    strCmd += " 1";
+//    //    BOOL bRet = CreateProcessA(NULL, (LPSTR)strCmd.c_str(), NULL, NULL, FALSE, 0, NULL, wstrDir, &si, &pi);
+//    //    if (bRet) {
+//    //        CloseHandle(pi.hThread);
+//    //        CloseHandle(pi.hProcess);
+//    //        TRACE("进程ID:%d\r\n", pi.dwProcessId);
+//    //        TRACE("线程ID:%d\r\n", pi.dwThreadId);
+//    //        strCmd += " 2";
+//    //        BOOL bRet = CreateProcessA(NULL, (LPSTR)strCmd.c_str(), NULL, NULL, FALSE, 0, NULL, wstrDir, &si, &pi);
+//    //        if (bRet) {
+//    //            CloseHandle(pi.hThread);
+//    //            CloseHandle(pi.hProcess);
+//    //            TRACE("进程ID:%d\r\n", pi.dwProcessId);
+//    //            TRACE("线程ID:%d\r\n", pi.dwThreadId);
+//    //            udp_server();//服务器代码
+//    //        }
+//    //    }
+//    //}
+//    //else if (argc == 2) { //主客户端代码
+//    //    udp_client();
+//    //}
+//    //else {  //从客户端代码
+//    //    udp_client(false);
+//    //}
+//    //clearsock();
+//
+//    iocp();
+//
+//    /*
+//   if (CEdoyunTool::IsAdmin()) {   //判断是够为管理员
+//
+//       if (ChooseAutoInvoke(INVOKE_PATH)) { //判断自启动是否成功
+//           CCommand cmd;
+//           int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);
+//           switch (ret) {
+//           case -1:
+//               MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
+//               break;
+//           case -2:
+//               MessageBox(NULL, _T("多次无法正常接入用户,结束程序！"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
+//               break;
+//           }
+//       }
+//   }
+//   else {
+//       if (CEdoyunTool::RunAsAdmin() == false) {
+//           CEdoyunTool::ShowError();
+//           return 1;
+//       }
+//
+//   }  */
+//    return 0;
+//}
 
-    iocp();
 
-    /*
-   if (CEdoyunTool::IsAdmin()) {   //判断是够为管理员
-
-       if (ChooseAutoInvoke(INVOKE_PATH)) { //判断自启动是否成功
-           CCommand cmd;
-           int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);
-           switch (ret) {
-           case -1:
-               MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
-               break;
-           case -2:
-               MessageBox(NULL, _T("多次无法正常接入用户,结束程序！"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-               break;
-           }
-       }
-   }
-   else {
-       if (CEdoyunTool::RunAsAdmin() == false) {
-           CEdoyunTool::ShowError();
-           return 1;
-       }
-
-   }  */
+// 作为加入iocp和udp穿透前的client功能测试
+int main(int argc, char* argv[]) {
+    if (!CEdoyunTool::Init()) {
+        return 1;
+    }
+    CCommand cmd;
+    int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);
+    switch (ret) {
+    case -1:
+        MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
+        break;
+    case -2:
+        MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
+        break;
+    }
     return 0;
 }
+
+
 
 class COverlapped {
 public:

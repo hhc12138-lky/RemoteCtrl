@@ -22,7 +22,6 @@ CCommand::CCommand() :threadid(0)
 	for (const auto& item : data) {
 		m_mapFunction[item.nCmd] = item.func;
 	}
-	
 }
 
 CCommand::~CCommand() {
@@ -37,8 +36,10 @@ int CCommand::ExcuteCommand(int nCmd, std::list<CPacket>& listPackets, CPacket& 
 	if (it == m_mapFunction.end()) {
 		return -1;
 	}
-	
+
+	TRACE("Executing command: %d\n", nCmd);
 	return(this->*it->second)(listPackets, inPacket);
+
 	/*  this->*it->second解释
 	C++中，这些操作符的优先级如下（从高到低）：
 	->  (成员访问)  >  
